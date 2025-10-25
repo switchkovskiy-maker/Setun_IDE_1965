@@ -2,8 +2,8 @@
 #include "StandardLibrary.h"
 #include "CircuitElement.h"
 #include "CircuitElements.h"
+#include <memory>
 
-// Реализация функции регистрации библиотеки
 extern "C" {
 
 DLL_EXPORT bool __stdcall RegisterStandardLibrary(TLibraryManager* libraryManager) {
@@ -81,6 +81,7 @@ DLL_EXPORT bool __stdcall RegisterStandardLibrary(TLibraryManager* libraryManage
                 return new TGenerator(Id, X, Y);
             });
 
+        // Используем переданный libraryManager вместо глобального
         libraryManager->RegisterLibrary(std::move(standardLib));
         return true;
     }

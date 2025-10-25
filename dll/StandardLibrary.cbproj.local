@@ -1,16 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<Transactions>
-    <Transaction>1899.12.30 00:00:00.000.070,=D:\TNNC\Setun IDE\2\CircuitElements.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.771,D:\TNNC\Setun IDE\2\dll\StandardLibrary.cbproj=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4.cbproj</Transaction>
     <Transaction>1899.12.30 00:00:00.000.563,=D:\TNNC\Setun IDE\2\ComponentLibrary.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.666,=D:\TNNC\Setun IDE\2\dll\StandardLibrary.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.636,=D:\TNNC\Setun IDE\2\dll\DllMain.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.070,=D:\TNNC\Setun IDE\2\CircuitElements.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.043,=D:\TNNC\Setun IDE\2\CircuitElement.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.771,C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4.cbproj=D:\TNNC\Setun IDE\2\dll\StandardLibrary.cbproj</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.530,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.767,C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp=D:\TNNC\Setun IDE\2\dll\File1.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.636,=D:\TNNC\Setun IDE\2\dll\DllMain.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.666,=D:\TNNC\Setun IDE\2\dll\StandardLibrary.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.767,D:\TNNC\Setun IDE\2\dll\File1.cpp=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.587,=D:\TNNC\Setun IDE\2\TernaryTypes.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.530,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.734,D:\TNNC\Setun IDE\2\dll\StandardLibraryPCH1.h=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.528,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.734,C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h=D:\TNNC\Setun IDE\2\dll\StandardLibraryPCH1.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.781,D:\TNNC\Setun IDE\2\dll\File1.cpp=</Transaction>
   </Transactions>
 </BorlandProject>

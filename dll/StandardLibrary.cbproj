@@ -137,9 +137,6 @@
         <CppCompile Include="DllMain.cpp">
             <BuildOrder>2</BuildOrder>
         </CppCompile>
-        <CppCompile Include="File1.cpp">
-            <BuildOrder>1</BuildOrder>
-        </CppCompile>
         <CppCompile Include="StandardLibrary.cpp">
             <DependentOn>StandardLibrary.h</DependentOn>
             <BuildOrder>3</BuildOrder>
