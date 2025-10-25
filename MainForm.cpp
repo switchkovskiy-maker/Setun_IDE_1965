@@ -1,6 +1,8 @@
 ﻿#include "MainForm.h"
 #include "CircuitElement.h"
 #include "CircuitElements.h"
+#include "ComponentLibrary.h"
+#include "StandardLibrary.h"
 #include <Vcl.Dialogs.hpp>
 #include <Vcl.Graphics.hpp>
 #include <math.h>
@@ -129,6 +131,10 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
 }
 
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
+    // Инициализируем менеджер библиотек
+    LibraryManager = std::make_unique<TLibraryManager>();
+    RegisterStandardLibrary();
+    
     CreateCompleteLibrary();
     CircuitImage->Align = alNone;
     CircuitImage->Cursor = crCross;
@@ -140,6 +146,9 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     btnMultiSelect->AllowAllUp = true;
     btnMultiSelect->GroupIndex = 2;
 
+    // Инициализируем селектор библиотек
+    UpdateLibrarySelector();
+    
     StatusBar->Panels->Items[0]->Text = "Готов к работе. Выберите элемент из библиотеки или режим соединения.";
     Caption = "Setun IDE - Троичная логика по книге 1965 года";
 }
@@ -148,6 +157,7 @@ void __fastcall TMainForm::FormDestroy(TObject *Sender) {
     for (auto element : FElements) {
         delete element;
     }
+    LibraryManager.reset(); // Освобождаем менеджер библиотек
 }
 
 void __fastcall TMainForm::FormResize(TObject *Sender) {
@@ -194,61 +204,53 @@ TRect TMainForm::GetCircuitBounds() {
 
     return bounds;
 }
-void TMainForm::CreateCompleteLibrary() {
+
+void TMainForm::UpdateLibrarySelector() {
+    cmbLibrarySelector->Items->Clear();
+    auto libraryNames = LibraryManager->GetLibraryNames();
+    for (const auto& name : libraryNames) {
+        cmbLibrarySelector->Items->Add(name);
+    }
+    
+    if (!libraryNames.empty()) {
+        cmbLibrarySelector->ItemIndex = 0;
+        LoadCurrentLibrary();
+    }
+}
+
+void TMainForm::LoadCurrentLibrary() {
     ElementLibrary->Items->Clear();
+    
+    auto currentLib = LibraryManager->GetCurrentLibrary();
+    if (currentLib) {
+        auto elements = currentLib->ElementDescriptions;
+        for (const auto& element : elements) {
+            ElementLibrary->Items->Add(element);
+        }
+        
+        LibraryLabel->Caption = "Библиотека: " + currentLib->Name;
+        StatusBar->Panels->Items[0]->Text = "Загружена библиотека: " + currentLib->Name;
+    }
+}
 
-    ElementLibrary->Items->Add("Магнитный усилитель (простой) - стр. 43");
-    ElementLibrary->Items->Add("Магнитный усилитель (мощный) - стр. 49");
-    ElementLibrary->Items->Add("Троичный элемент - стр. 50");
-    ElementLibrary->Items->Add("Троичный триггер - стр. 55");
-    ElementLibrary->Items->Add("Полусумматор - стр. 58");
-    ElementLibrary->Items->Add("Троичный сумматор - стр. 58");
-    ElementLibrary->Items->Add("Дешифратор кода - стр. 57");
-    ElementLibrary->Items->Add("Троичный счетчик - стр. 59");
-    ElementLibrary->Items->Add("Сдвигающий регистр - стр. 45");
-    ElementLibrary->Items->Add("Логический элемент И - стр. 49");
-    ElementLibrary->Items->Add("Логический элемент ИЛИ - стр. 49");
-    ElementLibrary->Items->Add("Схема запрета - стр. 47");
-    ElementLibrary->Items->Add("Генератор единиц - стр. 50");
+void __fastcall TMainForm::cmbLibrarySelectorChange(TObject *Sender) {
+    if (cmbLibrarySelector->ItemIndex >= 0) {
+        String libraryName = cmbLibrarySelector->Items->Strings[cmbLibrarySelector->ItemIndex];
+        LibraryManager->SetCurrentLibrary(libraryName);
+        LoadCurrentLibrary();
+    }
+}
 
-    LibraryLabel->Caption = "Библиотека элементов (Сетунь, 1965)";
+void TMainForm::CreateCompleteLibrary() {
+    // Теперь библиотека загружается через LibraryManager
+    UpdateLibrarySelector();
 }
 
 TCircuitElement* TMainForm::CreateElementByType(const String& ElementDesc, int X, int Y) {
-    TCircuitElement* element = nullptr;
-
-    if (ElementDesc.Pos("Магнитный усилитель (простой)") > 0) {
-        element = new TMagneticAmplifier(FNextElementId++, X, Y, false);
-    } else if (ElementDesc.Pos("Магнитный усилитель (мощный)") > 0) {
-        element = new TMagneticAmplifier(FNextElementId++, X, Y, true);
-    } else if (ElementDesc.Pos("Троичный элемент") > 0) {
-        element = new TTernaryElement(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Троичный триггер") > 0) {
-        element = new TTernaryTrigger(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Полусумматор") > 0) {
-        element = new THalfAdder(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Троичный сумматор") > 0) {
-        element = new TTernaryAdder(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Дешифратор кода") > 0) {
-        element = new TDecoder(FNextElementId++, X, Y, 2);
-    } else if (ElementDesc.Pos("Троичный счетчик") > 0) {
-        element = new TCounter(FNextElementId++, X, Y, 3);
-    } else if (ElementDesc.Pos("Сдвигающий регистр") > 0) {
-        element = new TShiftRegister(FNextElementId++, X, Y, 4);
-    } else if (ElementDesc.Pos("Логический элемент И") > 0) {
-        element = new TLogicAnd(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Логический элемент ИЛИ") > 0) {
-        element = new TLogicOr(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Схема запрета") > 0) {
-        element = new TLogicInhibit(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Генератор единиц") > 0) {
-        element = new TGenerator(FNextElementId++, X, Y);
-    }
-
+    TCircuitElement* element = LibraryManager->CreateElementFromCurrent(ElementDesc, FNextElementId++, X, Y);
     if (element) {
         element->CalculateRelativePositions();
     }
-
     return element;
 }
 
@@ -361,6 +363,7 @@ void __fastcall TMainForm::btnMultiSelectClick(TObject *Sender) {
         CircuitImage->Cursor = crDefault;
     }
 }
+
 void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton Button,
     TShiftState Shift, int X, int Y) {
 
@@ -632,6 +635,7 @@ void TMainForm::ResetSimulation() {
         if (connection.second) connection.second->Value = TTernary::ZERO;
     }
 }
+
 void __fastcall TMainForm::btnClearWorkspaceClick(TObject *Sender) {
     if (Application->MessageBox(L"Очистить всю рабочую область?", L"Подтверждение",
                                MB_YESNO | MB_ICONQUESTION) == ID_YES) {
@@ -802,6 +806,7 @@ void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
         }
     }
 }
+
 void TMainForm::SaveSchemeToFile(const String& FileName) {
     std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
 
@@ -988,6 +993,7 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
     UpdatePaintBoxSize();
     CircuitImage->Repaint();
 }
+
 String TMainForm::ElementTypeToString(TElementType Type) {
     switch (Type) {
         case TElementType::MAGNETIC_AMPLIFIER: return "MAGNETIC_AMPLIFIER";
@@ -1078,7 +1084,6 @@ TCircuitElement* TMainForm::CreateElementByTypeName(const String& TypeName, int 
     if (element) {
         element->CalculateRelativePositions();
     }
-
     return element;
 }
 

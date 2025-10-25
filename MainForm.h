@@ -12,6 +12,7 @@
 #include <System.IniFiles.hpp>
 #include "CircuitElement.h"
 #include "CircuitElements.h"
+#include "ComponentLibrary.h"
 #include <System.Classes.hpp>
 #include <System.JSON.hpp>
 #include <Vcl.Dialogs.hpp>
@@ -47,6 +48,8 @@ __published:
     TButton *btnLoadScheme;
     TButton *btnGroupElements;
     TButton *btnUngroupElements;
+    TComboBox *cmbLibrarySelector;
+    TLabel *lblLibrarySelector;
     TSaveDialog *SaveDialog;
     TOpenDialog *OpenDialog;
     
@@ -76,6 +79,7 @@ __published:
     void __fastcall btnLoadSchemeClick(TObject *Sender);
     void __fastcall btnGroupElementsClick(TObject *Sender);
     void __fastcall btnUngroupElementsClick(TObject *Sender);
+    void __fastcall cmbLibrarySelectorChange(TObject *Sender);
     
 private:
     std::vector<TCircuitElement*> FElements;
@@ -114,6 +118,8 @@ private:
     std::vector<TCircuitElement*> GetSelectedElements();
     void CreateSubCircuitFromSelection();
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
+    void UpdateLibrarySelector();
+    void LoadCurrentLibrary();
     
 public:
     __fastcall TMainForm(TComponent* Owner);

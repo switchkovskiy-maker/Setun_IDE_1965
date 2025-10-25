@@ -133,6 +133,10 @@
             <DependentOn>CircuitElements.h</DependentOn>
             <BuildOrder>4</BuildOrder>
         </CppCompile>
+        <CppCompile Include="ComponentLibrary.cpp">
+            <DependentOn>ComponentLibrary.h</DependentOn>
+            <BuildOrder>6</BuildOrder>
+        </CppCompile>
         <CppCompile Include="MainForm.cpp">
             <Form>Form4</Form>
             <FormType>dfm</FormType>
@@ -146,6 +150,10 @@
             <BuildOrder>1</BuildOrder>
             <PCH>true</PCH>
         </PCHCompile>
+        <CppCompile Include="StandardLibrary.cpp">
+            <DependentOn>StandardLibrary.h</DependentOn>
+            <BuildOrder>7</BuildOrder>
+        </CppCompile>
         <None Include="TernaryTypes.h">
             <BuildOrder>5</BuildOrder>
         </None>

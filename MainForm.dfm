@@ -153,13 +153,27 @@ object MainForm: TMainForm
     Align = alLeft
     TabOrder = 1
     ExplicitHeight = 631
-    object LibraryLabel: TLabel
+    object lblLibrarySelector: TLabel
       Left = 1
       Top = 1
-      Width = 265
+      Width = 74
       Height = 16
       Align = alTop
-      Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072' '#1101#1083#1077#1084#1077#1085#1090#1086#1074' ('#1057#1077#1091#1090#1091#1085#1100', 1965)'
+      Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072':'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -13
+      Font.Name = 'Tahoma'
+      Font.Style = []
+      ParentFont = False
+    end
+    object LibraryLabel: TLabel
+      Left = 1
+      Top = 38
+      Width = 155
+      Height = 16
+      Align = alTop
+      Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072' '#1101#1083#1077#1084#1077#1085#1090#1086#1074
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -13
@@ -167,14 +181,24 @@ object MainForm: TMainForm
       Font.Style = [fsBold]
       ParentFont = False
     end
-    object ElementLibrary: TListBox
+    object cmbLibrarySelector: TComboBox
       Left = 1
       Top = 17
       Width = 248
-      Height = 614
+      Height = 21
+      Align = alTop
+      Style = csDropDownList
+      TabOrder = 0
+      OnChange = cmbLibrarySelectorChange
+    end
+    object ElementLibrary: TListBox
+      Left = 1
+      Top = 54
+      Width = 248
+      Height = 577
       Align = alClient
       ItemHeight = 13
-      TabOrder = 0
+      TabOrder = 1
       OnDblClick = ElementLibraryDblClick
     end
   end

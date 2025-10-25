@@ -3,17 +3,19 @@
 	<Transactions>
     <Transaction>1899.12.30 00:00:00.000.341,=D:\TNNC\Setun IDE\2\CircuitElement.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.668,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.453,D:\TNNC\Setun IDE\2\Unit4.dfm=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.431,D:\TNNC\Setun IDE\2\SetunIDEPCH1.h=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.453,D:\TNNC\Setun IDE\2\Unit4.cpp=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.374,=D:\TNNC\Setun IDE\2\CircuitElements.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.453,D:\TNNC\Setun IDE\2\Unit4.h=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.421,D:\TNNC\Setun IDE\2\MainForm.dfm=D:\TNNC\Setun IDE\2\Unit4.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.421,D:\TNNC\Setun IDE\2\MainForm.cpp=D:\TNNC\Setun IDE\2\Unit4.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.468,D:\TNNC\Setun IDE\2\SetunIDE.cbproj=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4.cbproj</Transaction>
     <Transaction>1899.12.30 00:00:00.000.148,D:\TNNC\Setun IDE\2\SetunIDE.cbproj=D:\TNNC\Setun IDE\2\SetunIDE.cbproj</Transaction>
     <Transaction>1899.12.30 00:00:00.000.468,=D:\TNNC\Setun IDE\2\TernaryTypes.h</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.421,D:\TNNC\Setun IDE\2\MainForm.cpp=D:\TNNC\Setun IDE\2\Unit4.cpp</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.431,D:\TNNC\Setun IDE\2\SetunIDEPCH1.h=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.453,D:\TNNC\Setun IDE\2\Unit4.dfm=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.dfm</Transaction>
     <Transaction>1899.12.30 00:00:00.000.421,D:\TNNC\Setun IDE\2\MainForm.h=D:\TNNC\Setun IDE\2\Unit4.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.654,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
+    <Transaction>2025.10.25 20:02:30.344,=D:\TNNC\Setun IDE\2\ComponentLibrary.cpp</Transaction>
+    <Transaction>2025.10.25 20:02:30.365,=D:\TNNC\Setun IDE\2\StandardLibrary.cpp</Transaction>
   </Transactions>
 </BorlandProject>
