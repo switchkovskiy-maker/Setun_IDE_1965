@@ -1,0 +1,4 @@
+LIBRARY StandardLibrary
+
+EXPORTS
+    RegisterStandardLibrary @1
