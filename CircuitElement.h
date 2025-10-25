@@ -15,41 +15,60 @@ protected:
     std::vector<TConnectionPoint> FInputs;
     std::vector<TConnectionPoint> FOutputs;
     TTernary FCurrentState;
-
+    
     // Вспомогательные методы для рисования по книжным стандартам
     void DrawMagneticAmplifier(TCanvas* Canvas, bool IsPowerful);
     void DrawTernaryElement(TCanvas* Canvas);
     void DrawControlLine(TCanvas* Canvas, const TConnectionPoint& Point);
     void DrawCrossingLine(TCanvas* Canvas, int X1, int Y1, int X2, int Y2);
-    void DrawConnectionPoints(TCanvas* Canvas); // Добавлено объявление
-
+    void DrawConnectionPoints(TCanvas* Canvas);
+    
 public:
     TCircuitElement(int AId, const String& AName, TElementType AType, int X, int Y);
     virtual ~TCircuitElement() {}
-
+    
     virtual void Calculate() = 0;
     virtual void Draw(TCanvas* Canvas);
     virtual TConnectionPoint* GetConnectionAt(int X, int Y);
-
+    
     // Метод SetBounds теперь определен inline в заголовочном файле
-    void SetBounds(const TRect& NewBounds) {
-        // Сохраняем смещения для корректного обновления соединений
-        int deltaX = NewBounds.Left - FBounds.Left;
-        int deltaY = NewBounds.Top - FBounds.Top;
-
-        FBounds = NewBounds;
-
-        // Обновляем позиции всех входов и выходов
+    void SetBounds(const TRect& NewBounds) { 
+        // Сохраняем старые границы для вычисления относительных позиций
+        TRect oldBounds = FBounds;
+        FBounds = NewBounds; 
+        
+        // Пересчитываем абсолютные координаты на основе относительных
         for (auto& input : FInputs) {
-            input.X += deltaX;
-            input.Y += deltaY;
+            input.X = NewBounds.Left + (int)(input.RelX * NewBounds.Width());
+            input.Y = NewBounds.Top + (int)(input.RelY * NewBounds.Height());
         }
         for (auto& output : FOutputs) {
-            output.X += deltaX;
-            output.Y += deltaY;
+            output.X = NewBounds.Left + (int)(output.RelX * NewBounds.Width());
+            output.Y = NewBounds.Top + (int)(output.RelY * NewBounds.Height());
         }
     }
-
+    
+    // Метод для вычисления относительных позиций точек соединения
+    void CalculateRelativePositions() {
+        for (auto& input : FInputs) {
+            if (FBounds.Width() > 0 && FBounds.Height() > 0) {
+                input.RelX = (double)(input.X - FBounds.Left) / FBounds.Width();
+                input.RelY = (double)(input.Y - FBounds.Top) / FBounds.Height();
+            }
+        }
+        for (auto& output : FOutputs) {
+            if (FBounds.Width() > 0 && FBounds.Height() > 0) {
+                output.RelX = (double)(output.X - FBounds.Left) / FBounds.Width();
+                output.RelY = (double)(output.Y - FBounds.Top) / FBounds.Height();
+            }
+        }
+    }
+    
+    // Добавленные методы для доступа к protected членам
+    void SetId(int AId) { FId = AId; }
+    void SetName(const String& AName) { FName = AName; }
+    void SetCurrentState(TTernary State) { FCurrentState = State; }
+    
     // Свойства
     __property int Id = { read = FId };
     __property String Name = { read = FName };
@@ -64,7 +83,7 @@ public:
 class TMagneticAmplifier : public TCircuitElement {
 private:
     bool FIsPowered;
-
+    
 public:
     TMagneticAmplifier(int AId, int X, int Y, bool IsPowerful = false);
     void Calculate() override;
@@ -81,7 +100,7 @@ public:
 class TShiftRegister : public TCircuitElement {
 private:
     int FBitCount;
-
+    
 public:
     TShiftRegister(int AId, int X, int Y, int BitCount = 4);
     void Calculate() override;

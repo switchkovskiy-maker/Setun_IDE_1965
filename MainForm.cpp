@@ -1,4 +1,4 @@
-#include "MainForm.h"
+п»ї#include "MainForm.h"
 #include "CircuitElement.h"
 #include "CircuitElements.h"
 #include <Vcl.Dialogs.hpp>
@@ -6,35 +6,118 @@
 #include <math.h>
 #include <algorithm>
 #include <memory>
+#include <System.IOUtils.hpp>
 
 #pragma package(smart_init)
 #pragma resource "*.dfm"
 
 TMainForm *MainForm;
 
+// Р РµР°Р»РёР·Р°С†РёСЏ РјРµС‚РѕРґРѕРІ TSubCircuit
+TSubCircuit::TSubCircuit(int AId, int X, int Y, const std::vector<TCircuitElement*>& Elements,
+            const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& Connections)
+    : TCircuitElement(AId, "SubCircuit", TElementType::TERNARY_ELEMENT, X, Y) {
+
+    FBounds = TRect(X, Y, X + 120, Y + 80);
+    FInternalElements = Elements;
+    FInternalConnections = Connections;
+
+    // РЎРѕР·РґР°РµРј РІС…РѕРґС‹ Рё РІС‹С…РѕРґС‹ РґР»СЏ РїРѕРґСЃС…РµРјС‹
+    CreateExternalConnections();
+    
+    // Р’С‹С‡РёСЃР»СЏРµРј РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Рµ РїРѕР·РёС†РёРё
+    CalculateRelativePositions();
+}
+
+void TSubCircuit::Calculate() {
+    // Р’С‹С‡РёСЃР»СЏРµРј РІСЃРµ РІРЅСѓС‚СЂРµРЅРЅРёРµ СЌР»РµРјРµРЅС‚С‹
+    for (auto element : FInternalElements) {
+        element->Calculate();
+    }
+
+    // РћР±РЅРѕРІР»СЏРµРј РІРЅСѓС‚СЂРµРЅРЅРёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (auto& connection : FInternalConnections) {
+        if (connection.first && connection.second) {
+            connection.second->Value = connection.first->Value;
+        }
+    }
+
+    // РџРµСЂРµРґР°РµРј Р·РЅР°С‡РµРЅРёСЏ РЅР° РІРЅРµС€РЅРёРµ РІС…РѕРґС‹/РІС‹С…РѕРґС‹
+    UpdateExternalConnections();
+}
+
+void TSubCircuit::Draw(TCanvas* Canvas) {
+    // Р РёСЃСѓРµРј РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє РїРѕРґСЃС…РµРјС‹
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clPurple;
+    Canvas->Pen->Width = 2;
+    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
+    Canvas->Pen->Width = 1;
+    Canvas->Pen->Color = clBlack;
+
+    // РџРѕРґРїРёСЃСЊ
+    Canvas->Font->Size = 8;
+    Canvas->Font->Color = clPurple;
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "SubCircuit");
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 20, "Elems: " + IntToStr(static_cast<int>(FInternalElements.size())));
+    Canvas->Font->Color = clBlack;
+
+    // Р РёСЃСѓРµРј С‚РѕС‡РєРё СЃРѕРµРґРёРЅРµРЅРёСЏ
+    DrawConnectionPoints(Canvas);
+}
+
+void TSubCircuit::CreateExternalConnections() {
+    // РЎРѕР·РґР°РµРј РІС…РѕРґС‹ Рё РІС‹С…РѕРґС‹ РЅР° РѕСЃРЅРѕРІРµ РІРЅСѓС‚СЂРµРЅРЅРёС… СЃРѕРµРґРёРЅРµРЅРёР№
+    // Р­С‚Рѕ СѓРїСЂРѕС‰РµРЅРЅР°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ - РІ СЂРµР°Р»СЊРЅРѕСЃС‚Рё РЅСѓР¶РЅРѕ Р°РЅР°Р»РёР·РёСЂРѕРІР°С‚СЊ РіСЂР°РЅРёС†С‹ РїРѕРґСЃС…РµРјС‹
+
+    // Р”РѕР±Р°РІР»СЏРµРј РЅРµСЃРєРѕР»СЊРєРѕ СЃС‚Р°РЅРґР°СЂС‚РЅС‹С… РІС…РѕРґРѕРІ Рё РІС‹С…РѕРґРѕРІ
+    FInputs.push_back(TConnectionPoint(this, FBounds.Left - 15, FBounds.Top + 20,
+        TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, FBounds.Left - 15, FBounds.Top + 40,
+        TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FOutputs.push_back(TConnectionPoint(this, FBounds.Right + 15, FBounds.Top + 30,
+        TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, FBounds.Right + 15, FBounds.Top + 50,
+        TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    
+    // Р’С‹С‡РёСЃР»СЏРµРј РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Рµ РїРѕР·РёС†РёРё
+    CalculateRelativePositions();
+}
+
+void TSubCircuit::UpdateExternalConnections() {
+    // Р—РґРµСЃСЊ РґРѕР»Р¶РЅР° Р±С‹С‚СЊ Р»РѕРіРёРєР° РїРµСЂРµРґР°С‡Рё Р·РЅР°С‡РµРЅРёР№ РјРµР¶РґСѓ РІРЅСѓС‚СЂРµРЅРЅРёРјРё СЌР»РµРјРµРЅС‚Р°РјРё Рё РІРЅРµС€РЅРёРјРё СЃРѕРµРґРёРЅРµРЅРёСЏРјРё
+    // РЈРїСЂРѕС‰РµРЅРЅР°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ
+    if (FInternalElements.size() > 0) {
+        FOutputs[0].Value = FInternalElements[0]->CurrentState;
+    }
+}
+
+// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ MainForm
 __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
-    FIsConnecting(false), FIsDragging(false), FNextElementId(1),
-    FDragOffsetX(0), FDragOffsetY(0) {
+    FIsConnecting(false), FIsDragging(false), FIsMultiSelecting(false),
+    FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0) {
 }
 
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
     CreateCompleteLibrary();
 
-    // Настройка workspace
+    // РќР°СЃС‚СЂРѕР№РєР° workspace
     CircuitImage->Align = alNone;
     CircuitImage->Cursor = crCross;
     UpdatePaintBoxSize();
 
-    // Настройка панели инструментов
+    // РќР°СЃС‚СЂРѕР№РєР° РїР°РЅРµР»Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ
     btnConnectionMode->AllowAllUp = true;
     btnConnectionMode->GroupIndex = 1;
+    btnMultiSelect->AllowAllUp = true;
+    btnMultiSelect->GroupIndex = 2;
 
-    // Настройка статусной строки
-    StatusBar->Panels->Items[0]->Text = "Готов к работе. Выберите элемент из библиотеки или режим соединения.";
+    // РќР°СЃС‚СЂРѕР№РєР° СЃС‚Р°С‚СѓСЃРЅРѕР№ СЃС‚СЂРѕРєРё
+    StatusBar->Panels->Items[0]->Text = "Р“РѕС‚РѕРІ Рє СЂР°Р±РѕС‚Рµ. Р’С‹Р±РµСЂРёС‚Рµ СЌР»РµРјРµРЅС‚ РёР· Р±РёР±Р»РёРѕС‚РµРєРё РёР»Рё СЂРµР¶РёРј СЃРѕРµРґРёРЅРµРЅРёСЏ.";
 
-    // Установка заголовка
-    Caption = "Setun IDE - Троичная логика по книге 1965 года";
+    // РЈСЃС‚Р°РЅРѕРІРєР° Р·Р°РіРѕР»РѕРІРєР°
+    Caption = "Setun IDE - РўСЂРѕРёС‡РЅР°СЏ Р»РѕРіРёРєР° РїРѕ РєРЅРёРіРµ 1965 РіРѕРґР°";
 }
 
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
@@ -55,19 +138,19 @@ void __fastcall TMainForm::WorkspaceResize(TObject *Sender) {
 
 void TMainForm::UpdatePaintBoxSize() {
     if (FElements.empty()) {
-        // Минимальный размер
+        // РњРёРЅРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ
         CircuitImage->Width = std::max(Workspace->ClientWidth, 800);
         CircuitImage->Height = std::max(Workspace->ClientHeight, 600);
     } else {
-        // Вычисляем границы всех элементов
+        // Р’С‹С‡РёСЃР»СЏРµРј РіСЂР°РЅРёС†С‹ РІСЃРµС… СЌР»РµРјРµРЅС‚РѕРІ
         TRect bounds = GetCircuitBounds();
 
-        // Добавляем отступы
+        // Р”РѕР±Р°РІР»СЏРµРј РѕС‚СЃС‚СѓРїС‹
         int padding = 200;
         int newWidth = bounds.Width() + padding;
         int newHeight = bounds.Height() + padding;
 
-        // Обеспечиваем минимальный размер
+        // РћР±РµСЃРїРµС‡РёРІР°РµРј РјРёРЅРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ
         newWidth = std::max(newWidth, Workspace->ClientWidth);
         newHeight = std::max(newHeight, Workspace->ClientHeight);
 
@@ -95,54 +178,60 @@ TRect TMainForm::GetCircuitBounds() {
 void TMainForm::CreateCompleteLibrary() {
     ElementLibrary->Items->Clear();
 
-    // Полная библиотека элементов по книге 1965 года
-    ElementLibrary->Items->Add("Магнитный усилитель (простой) - стр. 43");
-    ElementLibrary->Items->Add("Магнитный усилитель (мощный) - стр. 49");
-    ElementLibrary->Items->Add("Троичный элемент - стр. 50");
-    ElementLibrary->Items->Add("Троичный триггер - стр. 55");
-    ElementLibrary->Items->Add("Полусумматор - стр. 58");
-    ElementLibrary->Items->Add("Троичный сумматор - стр. 58");
-    ElementLibrary->Items->Add("Дешифратор кода - стр. 57");
-    ElementLibrary->Items->Add("Троичный счетчик - стр. 59");
-    ElementLibrary->Items->Add("Сдвигающий регистр - стр. 45");
-    ElementLibrary->Items->Add("Логический элемент И - стр. 49");
-    ElementLibrary->Items->Add("Логический элемент ИЛИ - стр. 49");
-    ElementLibrary->Items->Add("Схема запрета - стр. 47");
-    ElementLibrary->Items->Add("Генератор единиц - стр. 50");
+    // РџРѕР»РЅР°СЏ Р±РёР±Р»РёРѕС‚РµРєР° СЌР»РµРјРµРЅС‚РѕРІ РїРѕ РєРЅРёРіРµ 1965 РіРѕРґР°
+    ElementLibrary->Items->Add("РњР°РіРЅРёС‚РЅС‹Р№ СѓСЃРёР»РёС‚РµР»СЊ (РїСЂРѕСЃС‚РѕР№) - СЃС‚СЂ. 43");
+    ElementLibrary->Items->Add("РњР°РіРЅРёС‚РЅС‹Р№ СѓСЃРёР»РёС‚РµР»СЊ (РјРѕС‰РЅС‹Р№) - СЃС‚СЂ. 49");
+    ElementLibrary->Items->Add("РўСЂРѕРёС‡РЅС‹Р№ СЌР»РµРјРµРЅС‚ - СЃС‚СЂ. 50");
+    ElementLibrary->Items->Add("РўСЂРѕРёС‡РЅС‹Р№ С‚СЂРёРіРіРµСЂ - СЃС‚СЂ. 55");
+    ElementLibrary->Items->Add("РџРѕР»СѓСЃСѓРјРјР°С‚РѕСЂ - СЃС‚СЂ. 58");
+    ElementLibrary->Items->Add("РўСЂРѕРёС‡РЅС‹Р№ СЃСѓРјРјР°С‚РѕСЂ - СЃС‚СЂ. 58");
+    ElementLibrary->Items->Add("Р”РµС€РёС„СЂР°С‚РѕСЂ РєРѕРґР° - СЃС‚СЂ. 57");
+    ElementLibrary->Items->Add("РўСЂРѕРёС‡РЅС‹Р№ СЃС‡РµС‚С‡РёРє - СЃС‚СЂ. 59");
+    ElementLibrary->Items->Add("РЎРґРІРёРіР°СЋС‰РёР№ СЂРµРіРёСЃС‚СЂ - СЃС‚СЂ. 45");
+    ElementLibrary->Items->Add("Р›РѕРіРёС‡РµСЃРєРёР№ СЌР»РµРјРµРЅС‚ Р - СЃС‚СЂ. 49");
+    ElementLibrary->Items->Add("Р›РѕРіРёС‡РµСЃРєРёР№ СЌР»РµРјРµРЅС‚ РР›Р - СЃС‚СЂ. 49");
+    ElementLibrary->Items->Add("РЎС…РµРјР° Р·Р°РїСЂРµС‚Р° - СЃС‚СЂ. 47");
+    ElementLibrary->Items->Add("Р“РµРЅРµСЂР°С‚РѕСЂ РµРґРёРЅРёС† - СЃС‚СЂ. 50");
 
-    LibraryLabel->Caption = "Библиотека элементов (Сетунь, 1965)";
+    LibraryLabel->Caption = "Р‘РёР±Р»РёРѕС‚РµРєР° СЌР»РµРјРµРЅС‚РѕРІ (РЎРµС‚СѓРЅСЊ, 1965)";
 }
 
 TCircuitElement* TMainForm::CreateElementByType(const String& ElementDesc, int X, int Y) {
-    if (ElementDesc.Pos("Магнитный усилитель (простой)") > 0) {
-        return new TMagneticAmplifier(FNextElementId++, X, Y, false);
-    } else if (ElementDesc.Pos("Магнитный усилитель (мощный)") > 0) {
-        return new TMagneticAmplifier(FNextElementId++, X, Y, true);
-    } else if (ElementDesc.Pos("Троичный элемент") > 0) {
-        return new TTernaryElement(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Троичный триггер") > 0) {
-        return new TTernaryTrigger(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Полусумматор") > 0) {
-        return new THalfAdder(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Троичный сумматор") > 0) {
-        return new TTernaryAdder(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Дешифратор кода") > 0) {
-        return new TDecoder(FNextElementId++, X, Y, 2);
-    } else if (ElementDesc.Pos("Троичный счетчик") > 0) {
-        return new TCounter(FNextElementId++, X, Y, 3);
-    } else if (ElementDesc.Pos("Сдвигающий регистр") > 0) {
-        return new TShiftRegister(FNextElementId++, X, Y, 4);
-    } else if (ElementDesc.Pos("Логический элемент И") > 0) {
-        return new TLogicAnd(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Логический элемент ИЛИ") > 0) {
-        return new TLogicOr(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Схема запрета") > 0) {
-        return new TLogicInhibit(FNextElementId++, X, Y);
-    } else if (ElementDesc.Pos("Генератор единиц") > 0) {
-        return new TGenerator(FNextElementId++, X, Y);
+    TCircuitElement* element = nullptr;
+    
+    if (ElementDesc.Pos("РњР°РіРЅРёС‚РЅС‹Р№ СѓСЃРёР»РёС‚РµР»СЊ (РїСЂРѕСЃС‚РѕР№)") > 0) {
+        element = new TMagneticAmplifier(FNextElementId++, X, Y, false);
+    } else if (ElementDesc.Pos("РњР°РіРЅРёС‚РЅС‹Р№ СѓСЃРёР»РёС‚РµР»СЊ (РјРѕС‰РЅС‹Р№)") > 0) {
+        element = new TMagneticAmplifier(FNextElementId++, X, Y, true);
+    } else if (ElementDesc.Pos("РўСЂРѕРёС‡РЅС‹Р№ СЌР»РµРјРµРЅС‚") > 0) {
+        element = new TTernaryElement(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("РўСЂРѕРёС‡РЅС‹Р№ С‚СЂРёРіРіРµСЂ") > 0) {
+        element = new TTernaryTrigger(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("РџРѕР»СѓСЃСѓРјРјР°С‚РѕСЂ") > 0) {
+        element = new THalfAdder(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("РўСЂРѕРёС‡РЅС‹Р№ СЃСѓРјРјР°С‚РѕСЂ") > 0) {
+        element = new TTernaryAdder(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("Р”РµС€РёС„СЂР°С‚РѕСЂ РєРѕРґР°") > 0) {
+        element = new TDecoder(FNextElementId++, X, Y, 2);
+    } else if (ElementDesc.Pos("РўСЂРѕРёС‡РЅС‹Р№ СЃС‡РµС‚С‡РёРє") > 0) {
+        element = new TCounter(FNextElementId++, X, Y, 3);
+    } else if (ElementDesc.Pos("РЎРґРІРёРіР°СЋС‰РёР№ СЂРµРіРёСЃС‚СЂ") > 0) {
+        element = new TShiftRegister(FNextElementId++, X, Y, 4);
+    } else if (ElementDesc.Pos("Р›РѕРіРёС‡РµСЃРєРёР№ СЌР»РµРјРµРЅС‚ Р") > 0) {
+        element = new TLogicAnd(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("Р›РѕРіРёС‡РµСЃРєРёР№ СЌР»РµРјРµРЅС‚ РР›Р") > 0) {
+        element = new TLogicOr(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("РЎС…РµРјР° Р·Р°РїСЂРµС‚Р°") > 0) {
+        element = new TLogicInhibit(FNextElementId++, X, Y);
+    } else if (ElementDesc.Pos("Р“РµРЅРµСЂР°С‚РѕСЂ РµРґРёРЅРёС†") > 0) {
+        element = new TGenerator(FNextElementId++, X, Y);
     }
 
-    return nullptr;
+    if (element) {
+        element->CalculateRelativePositions();
+    }
+
+    return element;
 }
 
 void __fastcall TMainForm::CircuitImagePaint(TObject *Sender) {
@@ -150,18 +239,18 @@ void __fastcall TMainForm::CircuitImagePaint(TObject *Sender) {
 }
 
 void TMainForm::DrawCircuit() {
-    // Создаем буферизованный bitmap для избежания мерцания
+    // РЎРѕР·РґР°РµРј Р±СѓС„РµСЂРёР·РѕРІР°РЅРЅС‹Р№ bitmap РґР»СЏ РёР·Р±РµР¶Р°РЅРёСЏ РјРµСЂС†Р°РЅРёСЏ
     std::unique_ptr<TBitmap> buffer(new TBitmap);
     buffer->Width = CircuitImage->Width;
     buffer->Height = CircuitImage->Height;
 
     TCanvas* canvas = buffer->Canvas;
 
-    // Очистка фона
+    // РћС‡РёСЃС‚РєР° С„РѕРЅР°
     canvas->Brush->Color = clWhite;
     canvas->FillRect(CircuitImage->ClientRect);
 
-    // Рисуем сетку для удобства позиционирования
+    // Р РёСЃСѓРµРј СЃРµС‚РєСѓ РґР»СЏ СѓРґРѕР±СЃС‚РІР° РїРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёСЏ
     canvas->Pen->Color = clSilver;
     canvas->Pen->Style = psDot;
     for (int x = 0; x < CircuitImage->Width; x += 20) {
@@ -174,19 +263,19 @@ void TMainForm::DrawCircuit() {
     }
     canvas->Pen->Style = psSolid;
 
-    // Рисуем соединения
+    // Р РёСЃСѓРµРј СЃРѕРµРґРёРЅРµРЅРёСЏ
     canvas->Pen->Width = 2;
     for (auto& connection : FConnections) {
         TConnectionPoint* start = connection.first;
         TConnectionPoint* end = connection.second;
 
-        // Устанавливаем цвет по значению
+        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј С†РІРµС‚ РїРѕ Р·РЅР°С‡РµРЅРёСЋ
         canvas->Pen->Color = TernaryToColor(start->Value);
 
         canvas->MoveTo(start->X, start->Y);
         canvas->LineTo(end->X, end->Y);
 
-        // Рисуем стрелку на конце соединения
+        // Р РёСЃСѓРµРј СЃС‚СЂРµР»РєСѓ РЅР° РєРѕРЅС†Рµ СЃРѕРµРґРёРЅРµРЅРёСЏ
         int dx = end->X - start->X;
         int dy = end->Y - start->Y;
         double length = sqrt(dx*dx + dy*dy);
@@ -194,7 +283,7 @@ void TMainForm::DrawCircuit() {
             double unitX = dx / length;
             double unitY = dy / length;
 
-            // Стрелка
+            // РЎС‚СЂРµР»РєР°
             int arrowSize = 6;
             int arrowX = end->X - (int)(unitX * arrowSize);
             int arrowY = end->Y - (int)(unitY * arrowSize);
@@ -206,24 +295,34 @@ void TMainForm::DrawCircuit() {
     }
     canvas->Pen->Width = 1;
 
-    // Рисуем элементы
+    // Р РёСЃСѓРµРј СЌР»РµРјРµРЅС‚С‹
     for (auto element : FElements) {
         element->Draw(canvas);
     }
 
-    // Подсвечиваем выбранный элемент
-    if (FSelectedElement) {
+    // РџРѕРґСЃРІРµС‡РёРІР°РµРј РІС‹Р±СЂР°РЅРЅС‹Рµ СЌР»РµРјРµРЅС‚С‹ (РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРµ РІС‹РґРµР»РµРЅРёРµ)
+    for (auto selectedElement : FSelectedElements) {
         canvas->Pen->Color = clBlue;
         canvas->Pen->Width = 2;
         canvas->Pen->Style = psDash;
         canvas->Brush->Style = bsClear;
-        canvas->Rectangle(FSelectedElement->Bounds);
+        canvas->Rectangle(selectedElement->Bounds);
         canvas->Pen->Style = psSolid;
         canvas->Pen->Width = 1;
         canvas->Brush->Style = bsSolid;
     }
 
-    // Показываем временное соединение в режиме подключения
+    // Р РёСЃСѓРµРј РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє РІС‹РґРµР»РµРЅРёСЏ РІ СЂРµР¶РёРјРµ РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹Р±РѕСЂР°
+    if (FIsMultiSelecting && FIsDragging) {
+        canvas->Pen->Color = clBlue;
+        canvas->Pen->Style = psDash;
+        canvas->Brush->Style = bsClear;
+        canvas->Rectangle(FSelectionRect);
+        canvas->Pen->Style = psSolid;
+        canvas->Brush->Style = bsSolid;
+    }
+
+    // РџРѕРєР°Р·С‹РІР°РµРј РІСЂРµРјРµРЅРЅРѕРµ СЃРѕРµРґРёРЅРµРЅРёРµ РІ СЂРµР¶РёРјРµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ
     if (FIsConnecting && FConnectionStart) {
         canvas->Pen->Color = clBlue;
         canvas->Pen->Style = psDash;
@@ -233,7 +332,7 @@ void TMainForm::DrawCircuit() {
         canvas->Pen->Style = psSolid;
     }
 
-    // Копируем буфер на экран
+    // РљРѕРїРёСЂСѓРµРј Р±СѓС„РµСЂ РЅР° СЌРєСЂР°РЅ
     CircuitImage->Canvas->Draw(0, 0, buffer.get());
 }
 
@@ -245,31 +344,42 @@ TColor TMainForm::TernaryToColor(TTernary Value) {
         default: return clBlack;
     }
 }
+// РћР±СЂР°Р±РѕС‚С‡РёРє РґР»СЏ РєРЅРѕРїРєРё РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ
+void __fastcall TMainForm::btnMultiSelectClick(TObject *Sender) {
+    FIsMultiSelecting = btnMultiSelect->Down;
+    if (FIsMultiSelecting) {
+        StatusBar->Panels->Items[0]->Text = "Р РµР¶РёРј РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ: СЂРёСЃСѓР№С‚Рµ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє РґР»СЏ РІС‹Р±РѕСЂР° СЌР»РµРјРµРЅС‚РѕРІ";
+        CircuitImage->Cursor = crCross;
+    } else {
+        StatusBar->Panels->Items[0]->Text = "Р РµР¶РёРј РѕРґРёРЅРѕС‡РЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ";
+        CircuitImage->Cursor = crDefault;
+    }
+}
 
 void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton Button,
     TShiftState Shift, int X, int Y) {
 
     if (Button == mbLeft) {
-        // Проверяем режим соединения
+        // РџСЂРѕРІРµСЂСЏРµРј СЂРµР¶РёРј СЃРѕРµРґРёРЅРµРЅРёСЏ
         if (btnConnectionMode->Down) {
-            // Режим создания соединений
+            // Р РµР¶РёРј СЃРѕР·РґР°РЅРёСЏ СЃРѕРµРґРёРЅРµРЅРёР№
             for (auto element : FElements) {
                 TConnectionPoint* conn = element->GetConnectionAt(X, Y);
                 if (conn) {
                     if (!FIsConnecting) {
-                        // Первая точка соединения - должна быть выходом
+                        // РџРµСЂРІР°СЏ С‚РѕС‡РєР° СЃРѕРµРґРёРЅРµРЅРёСЏ - РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІС‹С…РѕРґРѕРј
                         if (!conn->IsInput) {
                             FConnectionStart = conn;
                             FIsConnecting = true;
-                            StatusBar->Panels->Items[0]->Text = "Выбрана выходная точка. Выберите входную точку.";
+                            StatusBar->Panels->Items[0]->Text = "Р’С‹Р±СЂР°РЅР° РІС‹С…РѕРґРЅР°СЏ С‚РѕС‡РєР°. Р’С‹Р±РµСЂРёС‚Рµ РІС…РѕРґРЅСѓСЋ С‚РѕС‡РєСѓ.";
                         } else {
-                            StatusBar->Panels->Items[0]->Text = "Ошибка: первая точка должна быть выходом (синяя)";
+                            StatusBar->Panels->Items[0]->Text = "РћС€РёР±РєР°: РїРµСЂРІР°СЏ С‚РѕС‡РєР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІС‹С…РѕРґРѕРј (СЃРёРЅСЏСЏ)";
                         }
                         CircuitImage->Repaint();
                     } else {
-                        // Вторая точка соединения - должна быть входом
+                        // Р’С‚РѕСЂР°СЏ С‚РѕС‡РєР° СЃРѕРµРґРёРЅРµРЅРёСЏ - РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІС…РѕРґРѕРј
                         if (conn->IsInput) {
-                            // Проверяем, что соединение не дублируется
+                            // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ СЃРѕРµРґРёРЅРµРЅРёРµ РЅРµ РґСѓР±Р»РёСЂСѓРµС‚СЃСЏ
                             bool connectionExists = false;
                             for (auto& existingConn : FConnections) {
                                 if (existingConn.first == FConnectionStart && existingConn.second == conn) {
@@ -280,12 +390,12 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 
                             if (!connectionExists) {
                                 FConnections.push_back(std::make_pair(FConnectionStart, conn));
-                                StatusBar->Panels->Items[0]->Text = "Соединение создано.";
+                                StatusBar->Panels->Items[0]->Text = "РЎРѕРµРґРёРЅРµРЅРёРµ СЃРѕР·РґР°РЅРѕ.";
                             } else {
-                                StatusBar->Panels->Items[0]->Text = "Соединение уже существует.";
+                                StatusBar->Panels->Items[0]->Text = "РЎРѕРµРґРёРЅРµРЅРёРµ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚.";
                             }
                         } else {
-                            StatusBar->Panels->Items[0]->Text = "Ошибка: вторая точка должна быть входом (зеленая)";
+                            StatusBar->Panels->Items[0]->Text = "РћС€РёР±РєР°: РІС‚РѕСЂР°СЏ С‚РѕС‡РєР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІС…РѕРґРѕРј (Р·РµР»РµРЅР°СЏ)";
                         }
                         FIsConnecting = false;
                         FConnectionStart = nullptr;
@@ -295,22 +405,35 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                 }
             }
 
-            // Если клик не на точке соединения, сбрасываем соединение
+            // Р•СЃР»Рё РєР»РёРє РЅРµ РЅР° С‚РѕС‡РєРµ СЃРѕРµРґРёРЅРµРЅРёСЏ, СЃР±СЂР°СЃС‹РІР°РµРј СЃРѕРµРґРёРЅРµРЅРёРµ
             if (FIsConnecting) {
                 FIsConnecting = false;
                 FConnectionStart = nullptr;
-                StatusBar->Panels->Items[0]->Text = "Соединение отменено.";
+                StatusBar->Panels->Items[0]->Text = "РЎРѕРµРґРёРЅРµРЅРёРµ РѕС‚РјРµРЅРµРЅРѕ.";
                 CircuitImage->Repaint();
             }
-        } else {
-            // Режим выбора и перемещения элементов
+        } 
+        // Р РµР¶РёРј РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ
+        else if (FIsMultiSelecting) {
+            FSelectionRect = TRect(X, Y, X, Y);
+            FIsDragging = true;
+            StatusBar->Panels->Items[0]->Text = "Р’С‹РґРµР»РµРЅРёРµ: СЂРёСЃСѓР№С‚Рµ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє";
+        }
+        // Р РµР¶РёРј РѕРґРёРЅРѕС‡РЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ Рё РїРµСЂРµРјРµС‰РµРЅРёСЏ
+        else {
             FSelectedElement = nullptr;
             FDraggedElement = nullptr;
 
-            // Ищем элемент под курсором (включая проверку границ)
+            // Р•СЃР»Рё РЅР°Р¶Р°С‚ Ctrl, РґРѕР±Р°РІР»СЏРµРј Рє СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРјСѓ РІС‹РґРµР»РµРЅРёСЋ, РёРЅР°С‡Рµ РѕС‡РёС‰Р°РµРј
+            if (!Shift.Contains(ssCtrl)) {
+                FSelectedElements.clear();
+            }
+
+            // РС‰РµРј СЌР»РµРјРµРЅС‚ РїРѕРґ РєСѓСЂСЃРѕСЂРѕРј (РІРєР»СЋС‡Р°СЏ РїСЂРѕРІРµСЂРєСѓ РіСЂР°РЅРёС†)
+            bool elementFound = false;
             for (auto element : FElements) {
                 TRect bounds = element->Bounds;
-                // Небольшое расширение области для удобства захвата
+                // РќРµР±РѕР»СЊС€РѕРµ СЂР°СЃС€РёСЂРµРЅРёРµ РѕР±Р»Р°СЃС‚Рё РґР»СЏ СѓРґРѕР±СЃС‚РІР° Р·Р°С…РІР°С‚Р°
                 TRect expandedBounds = TRect(
                     bounds.Left - 5, bounds.Top - 5,
                     bounds.Right + 5, bounds.Bottom + 5
@@ -320,33 +443,47 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                     Y >= expandedBounds.Top && Y <= expandedBounds.Bottom) {
 
                     FSelectedElement = element;
+                    elementFound = true;
+
+                    // РџСЂРѕРІРµСЂСЏРµРј, РЅРµ РІС‹РґРµР»РµРЅ Р»Рё СѓР¶Рµ СЌР»РµРјРµРЅС‚ (РґР»СЏ СЂРµР¶РёРјР° Ctrl)
+                    auto it = std::find(FSelectedElements.begin(), FSelectedElements.end(), element);
+                    if (it == FSelectedElements.end()) {
+                        FSelectedElements.push_back(element);
+                    }
+                    
                     FDraggedElement = element;
                     FIsDragging = true;
 
-                    // Смещение относительно левого верхнего угла элемента
+                    // РЎРјРµС‰РµРЅРёРµ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ Р»РµРІРѕРіРѕ РІРµСЂС…РЅРµРіРѕ СѓРіР»Р° СЌР»РµРјРµРЅС‚Р°
                     FDragOffsetX = X - bounds.Left;
                     FDragOffsetY = Y - bounds.Top;
 
-                    StatusBar->Panels->Items[0]->Text = "Выбран элемент: " + element->Name;
+                    StatusBar->Panels->Items[0]->Text = "Р’С‹Р±СЂР°РЅ СЌР»РµРјРµРЅС‚: " + element->Name;
                     break;
                 }
             }
 
-            if (!FSelectedElement) {
-                StatusBar->Panels->Items[0]->Text = "Ничего не выбрано.";
+            if (!elementFound) {
+                if (!Shift.Contains(ssCtrl)) {
+                    FSelectedElements.clear();
+                }
+                StatusBar->Panels->Items[0]->Text = "РќРёС‡РµРіРѕ РЅРµ РІС‹Р±СЂР°РЅРѕ.";
+            } else {
+//                StatusBar->Panels->Items[0]->Text = "Р’С‹Р±СЂР°РЅРѕ СЌР»РµРјРµРЅС‚РѕРІ: " + IntToStr(FSelectedElements.size());
+                  StatusBar->Panels->Items[0]->Text = "Р’С‹Р±СЂР°РЅРѕ СЌР»РµРјРµРЅС‚РѕРІ: " + IntToStr(static_cast<int>(FSelectedElements.size()));
             }
 
             CircuitImage->Repaint();
         }
     } else if (Button == mbRight) {
-        // Правый клик для контекстного меню
+        // РџСЂР°РІС‹Р№ РєР»РёРє РґР»СЏ РєРѕРЅС‚РµРєСЃС‚РЅРѕРіРѕ РјРµРЅСЋ
         FSelectedElement = nullptr;
         for (auto element : FElements) {
             if (X >= element->Bounds.Left && X <= element->Bounds.Right &&
                 Y >= element->Bounds.Top && Y <= element->Bounds.Bottom) {
                 FSelectedElement = element;
 
-                // Показываем контекстное меню
+                // РџРѕРєР°Р·С‹РІР°РµРј РєРѕРЅС‚РµРєСЃС‚РЅРѕРµ РјРµРЅСЋ
                 TPoint popupPos = CircuitImage->ClientToScreen(TPoint(X, Y));
                 ElementPopupMenu->Popup(popupPos.X, popupPos.Y);
                 break;
@@ -357,11 +494,11 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 
 void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Shift, int X, int Y) {
     if (FIsDragging && FDraggedElement) {
-        // Новые координаты элемента
+        // РќРѕРІС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹ СЌР»РµРјРµРЅС‚Р°
         int newLeft = X - FDragOffsetX;
         int newTop = Y - FDragOffsetY;
 
-        // Создаем новые границы с сохранением размера
+        // РЎРѕР·РґР°РµРј РЅРѕРІС‹Рµ РіСЂР°РЅРёС†С‹ СЃ СЃРѕС…СЂР°РЅРµРЅРёРµРј СЂР°Р·РјРµСЂР°
         TRect newBounds = TRect(
             newLeft,
             newTop,
@@ -369,17 +506,23 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
             newTop + FDraggedElement->Bounds.Height()
         );
 
-        // Обновляем позицию элемента (SetBounds сам обновит соединения)
+        // РћР±РЅРѕРІР»СЏРµРј РїРѕР·РёС†РёСЋ СЌР»РµРјРµРЅС‚Р° (SetBounds СЃР°Рј РѕР±РЅРѕРІРёС‚ СЃРѕРµРґРёРЅРµРЅРёСЏ)
         FDraggedElement->SetBounds(newBounds);
 
-        // Обновляем размер области рисования при необходимости
+        // РћР±РЅРѕРІР»СЏРµРј СЂР°Р·РјРµСЂ РѕР±Р»Р°СЃС‚Рё СЂРёСЃРѕРІР°РЅРёСЏ РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё
         UpdatePaintBoxSize();
 
-        // Немедленная перерисовка
+        // РќРµРјРµРґР»РµРЅРЅР°СЏ РїРµСЂРµСЂРёСЃРѕРІРєР°
+        CircuitImage->Repaint();
+    }
+    // Р РµР¶РёРј РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ - РѕР±РЅРѕРІР»СЏРµРј РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє
+    else if (FIsMultiSelecting && FIsDragging) {
+        FSelectionRect.Right = X;
+        FSelectionRect.Bottom = Y;
         CircuitImage->Repaint();
     }
 
-    // Обновляем курсор в режиме соединения
+    // РћР±РЅРѕРІР»СЏРµРј РєСѓСЂСЃРѕСЂ РІ СЂРµР¶РёРјРµ СЃРѕРµРґРёРЅРµРЅРёСЏ
     if (btnConnectionMode->Down) {
         bool overConnection = false;
         for (auto element : FElements) {
@@ -397,8 +540,46 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
 void __fastcall TMainForm::CircuitImageMouseUp(TObject *Sender, TMouseButton Button,
     TShiftState Shift, int X, int Y) {
     if (Button == mbLeft) {
-        FIsDragging = false;
-        FDraggedElement = nullptr;
+        // Р—Р°РІРµСЂС€РµРЅРёРµ РјРЅРѕР¶РµСЃС‚РІРµРЅРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ
+        if (FIsMultiSelecting && FIsDragging) {
+            FIsDragging = false;
+            
+            // РќРѕСЂРјР°Р»РёР·СѓРµРј РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє (Р»РµРІРѕ-РїСЂР°РІРѕ, РІРµСЂС…-РЅРёР·)
+            TRect normalizedRect = FSelectionRect;
+            if (normalizedRect.Left > normalizedRect.Right) {
+                std::swap(normalizedRect.Left, normalizedRect.Right);
+            }
+            if (normalizedRect.Top > normalizedRect.Bottom) {
+                std::swap(normalizedRect.Top, normalizedRect.Bottom);
+            }
+
+            // РћС‡РёС‰Р°РµРј РїСЂРµРґС‹РґСѓС‰РµРµ РІС‹РґРµР»РµРЅРёРµ
+            FSelectedElements.clear();
+            FSelectedElement = nullptr;
+
+            // РќР°С…РѕРґРёРј СЌР»РµРјРµРЅС‚С‹ РІРЅСѓС‚СЂРё РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРєР°
+            for (auto element : FElements) {
+                TRect bounds = element->Bounds;
+                if (bounds.Left >= normalizedRect.Left && bounds.Right <= normalizedRect.Right &&
+                    bounds.Top >= normalizedRect.Top && bounds.Bottom <= normalizedRect.Bottom) {
+                    
+                    FSelectedElements.push_back(element);
+                }
+            }
+
+            // Р•СЃР»Рё РІС‹РґРµР»РµРЅ РѕРґРёРЅ СЌР»РµРјРµРЅС‚, СѓСЃС‚Р°РЅР°РІР»РёРІР°РµРј РµРіРѕ РєР°Рє РѕСЃРЅРѕРІРЅРѕР№
+            if (FSelectedElements.size() == 1) {
+                FSelectedElement = FSelectedElements[0];
+            }
+
+//            StatusBar->Panels->Items[0]->Text = "Р’С‹РґРµР»РµРЅРѕ СЌР»РµРјРµРЅС‚РѕРІ: " + IntToStr(FSelectedElements.size());
+//		      StatusBar->Panels->Items[0]->Text = "РЎРѕР·РґР°РЅР° РїРѕРґСЃС…РµРјР° РёР· " + IntToStr(static_cast<int>(selectedElements.size())) + " СЌР»РµРјРµРЅС‚РѕРІ";
+
+            CircuitImage->Repaint();
+        } else {
+            FIsDragging = false;
+            FDraggedElement = nullptr;
+        }
     }
 }
 
@@ -406,7 +587,7 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
     if (ElementLibrary->ItemIndex >= 0) {
         String elementDesc = ElementLibrary->Items->Strings[ElementLibrary->ItemIndex];
 
-        // Позиция для нового элемента (центр workspace или рядом с курсором)
+        // РџРѕР·РёС†РёСЏ РґР»СЏ РЅРѕРІРѕРіРѕ СЌР»РµРјРµРЅС‚Р° (С†РµРЅС‚СЂ workspace РёР»Рё СЂСЏРґРѕРј СЃ РєСѓСЂСЃРѕСЂРѕРј)
         int x, y;
         TPoint mousePos = CircuitImage->ScreenToClient(Mouse->CursorPos);
         if (mousePos.X > 0 && mousePos.Y > 0 &&
@@ -424,7 +605,7 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
             UpdatePaintBoxSize();
             CircuitImage->Repaint();
 
-            StatusBar->Panels->Items[0]->Text = "Добавлен: " + elementDesc;
+            StatusBar->Panels->Items[0]->Text = "Р”РѕР±Р°РІР»РµРЅ: " + elementDesc;
         }
     }
 }
@@ -432,19 +613,19 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
 void __fastcall TMainForm::btnRunSimulationClick(TObject *Sender) {
     RunSimulationStep();
     CircuitImage->Repaint();
-    StatusBar->Panels->Items[0]->Text = "Симуляция выполнена.";
+    StatusBar->Panels->Items[0]->Text = "РЎРёРјСѓР»СЏС†РёСЏ РІС‹РїРѕР»РЅРµРЅР°.";
 }
 
 void TMainForm::RunSimulationStep() {
-    // Сначала обновляем входы элементов из соединений
+    // РЎРЅР°С‡Р°Р»Р° РѕР±РЅРѕРІР»СЏРµРј РІС…РѕРґС‹ СЌР»РµРјРµРЅС‚РѕРІ РёР· СЃРѕРµРґРёРЅРµРЅРёР№
     for (auto& connection : FConnections) {
         if (connection.first && connection.second) {
-            // Передаем значение от выхода ко входу
+            // РџРµСЂРµРґР°РµРј Р·РЅР°С‡РµРЅРёРµ РѕС‚ РІС‹С…РѕРґР° РєРѕ РІС…РѕРґСѓ
             connection.second->Value = connection.first->Value;
         }
     }
 
-    // Затем вычисляем все элементы
+    // Р—Р°С‚РµРј РІС‹С‡РёСЃР»СЏРµРј РІСЃРµ СЌР»РµРјРµРЅС‚С‹
     for (auto element : FElements) {
         element->Calculate();
     }
@@ -453,13 +634,13 @@ void TMainForm::RunSimulationStep() {
 void __fastcall TMainForm::btnResetSimulationClick(TObject *Sender) {
     ResetSimulation();
     CircuitImage->Repaint();
-    StatusBar->Panels->Items[0]->Text = "Симуляция сброшена.";
+    StatusBar->Panels->Items[0]->Text = "РЎРёРјСѓР»СЏС†РёСЏ СЃР±СЂРѕС€РµРЅР°.";
 }
 
 void TMainForm::ResetSimulation() {
-    // Сбрасываем все элементы в нулевое состояние
+    // РЎР±СЂР°СЃС‹РІР°РµРј РІСЃРµ СЌР»РµРјРµРЅС‚С‹ РІ РЅСѓР»РµРІРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ
     for (auto element : FElements) {
-        // Для элементов, которые имеют метод сброса (например, триггеры, счетчики)
+        // Р”Р»СЏ СЌР»РµРјРµРЅС‚РѕРІ, РєРѕС‚РѕСЂС‹Рµ РёРјРµСЋС‚ РјРµС‚РѕРґ СЃР±СЂРѕСЃР° (РЅР°РїСЂРёРјРµСЂ, С‚СЂРёРіРіРµСЂС‹, СЃС‡РµС‚С‡РёРєРё)
         TTernaryTrigger* trigger = dynamic_cast<TTernaryTrigger*>(element);
         if (trigger) {
             trigger->Reset();
@@ -470,7 +651,7 @@ void TMainForm::ResetSimulation() {
             counter->Reset();
         }
 
-        // Сбрасываем входы и выходы
+        // РЎР±СЂР°СЃС‹РІР°РµРј РІС…РѕРґС‹ Рё РІС‹С…РѕРґС‹
         for (auto& input : element->Inputs) {
             input.Value = TTernary::ZERO;
         }
@@ -479,7 +660,7 @@ void TMainForm::ResetSimulation() {
         }
     }
 
-    // Сбрасываем соединения
+    // РЎР±СЂР°СЃС‹РІР°РµРј СЃРѕРµРґРёРЅРµРЅРёСЏ
     for (auto& connection : FConnections) {
         if (connection.first) connection.first->Value = TTernary::ZERO;
         if (connection.second) connection.second->Value = TTernary::ZERO;
@@ -487,32 +668,36 @@ void TMainForm::ResetSimulation() {
 }
 
 void __fastcall TMainForm::btnClearWorkspaceClick(TObject *Sender) {
-    if (Application->MessageBox(L"Очистить всю рабочую область?", L"Подтверждение",
+    if (Application->MessageBox(L"РћС‡РёСЃС‚РёС‚СЊ РІСЃСЋ СЂР°Р±РѕС‡СѓСЋ РѕР±Р»Р°СЃС‚СЊ?", L"РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ",
                                MB_YESNO | MB_ICONQUESTION) == ID_YES) {
-        // Удаляем все элементы
+        // РЈРґР°Р»СЏРµРј РІСЃРµ СЌР»РµРјРµРЅС‚С‹
         for (auto element : FElements) {
             delete element;
         }
         FElements.clear();
 
-        // Очищаем соединения
+        // РћС‡РёС‰Р°РµРј СЃРѕРµРґРёРЅРµРЅРёСЏ
         FConnections.clear();
 
-        // Сбрасываем счетчик ID
+        // РћС‡РёС‰Р°РµРј РІС‹РґРµР»РµРЅРёРµ
+        FSelectedElements.clear();
+        FSelectedElement = nullptr;
+
+        // РЎР±СЂР°СЃС‹РІР°РµРј СЃС‡РµС‚С‡РёРє ID
         FNextElementId = 1;
 
         UpdatePaintBoxSize();
         CircuitImage->Repaint();
-        StatusBar->Panels->Items[0]->Text = "Рабочая область очищена.";
+        StatusBar->Panels->Items[0]->Text = "Р Р°Р±РѕС‡Р°СЏ РѕР±Р»Р°СЃС‚СЊ РѕС‡РёС‰РµРЅР°.";
     }
 }
 
 void __fastcall TMainForm::btnConnectionModeClick(TObject *Sender) {
     if (btnConnectionMode->Down) {
-        StatusBar->Panels->Items[0]->Text = "Режим соединения: выбирайте точки для соединения элементов.";
+        StatusBar->Panels->Items[0]->Text = "Р РµР¶РёРј СЃРѕРµРґРёРЅРµРЅРёСЏ: РІС‹Р±РёСЂР°Р№С‚Рµ С‚РѕС‡РєРё РґР»СЏ СЃРѕРµРґРёРЅРµРЅРёСЏ СЌР»РµРјРµРЅС‚РѕРІ.";
         CircuitImage->Cursor = crCross;
     } else {
-        StatusBar->Panels->Items[0]->Text = "Режим выбора: выбирайте и перемещайте элементы.";
+        StatusBar->Panels->Items[0]->Text = "Р РµР¶РёРј РІС‹Р±РѕСЂР°: РІС‹Р±РёСЂР°Р№С‚Рµ Рё РїРµСЂРµРјРµС‰Р°Р№С‚Рµ СЌР»РµРјРµРЅС‚С‹.";
         CircuitImage->Cursor = crDefault;
         FIsConnecting = false;
         FConnectionStart = nullptr;
@@ -521,34 +706,33 @@ void __fastcall TMainForm::btnConnectionModeClick(TObject *Sender) {
 
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
     if (FSelectedElement) {
-        // Удаляем соединения, связанные с этим элементом
+        // РЈРґР°Р»СЏРµРј СЃРѕРµРґРёРЅРµРЅРёСЏ, СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ СЌС‚РёРј СЌР»РµРјРµРЅС‚РѕРј
         auto it = FConnections.begin();
         while (it != FConnections.end()) {
-            if ((it->first->X >= FSelectedElement->Bounds.Left - 20 &&
-                it->first->X <= FSelectedElement->Bounds.Right + 20 &&
-                it->first->Y >= FSelectedElement->Bounds.Top - 20 &&
-                it->first->Y <= FSelectedElement->Bounds.Bottom + 20) ||
-                (it->second->X >= FSelectedElement->Bounds.Left - 20 &&
-                it->second->X <= FSelectedElement->Bounds.Right + 20 &&
-                it->second->Y >= FSelectedElement->Bounds.Top - 20 &&
-                it->second->Y <= FSelectedElement->Bounds.Bottom + 20)) {
+            if ((it->first->Owner == FSelectedElement) || (it->second->Owner == FSelectedElement)) {
                 it = FConnections.erase(it);
             } else {
                 ++it;
             }
         }
 
-        // Удаляем элемент
+        // РЈРґР°Р»СЏРµРј СЌР»РµРјРµРЅС‚
         auto elemIt = std::find(FElements.begin(), FElements.end(), FSelectedElement);
         if (elemIt != FElements.end()) {
             delete *elemIt;
             FElements.erase(elemIt);
         }
 
+        // РЈРґР°Р»СЏРµРј РёР· РІС‹РґРµР»РµРЅРёСЏ
+        auto selIt = std::find(FSelectedElements.begin(), FSelectedElements.end(), FSelectedElement);
+        if (selIt != FSelectedElements.end()) {
+            FSelectedElements.erase(selIt);
+        }
+
         FSelectedElement = nullptr;
         UpdatePaintBoxSize();
         CircuitImage->Repaint();
-        StatusBar->Panels->Items[0]->Text = "Элемент удален.";
+        StatusBar->Panels->Items[0]->Text = "Р­Р»РµРјРµРЅС‚ СѓРґР°Р»РµРЅ.";
     }
 }
 
@@ -559,67 +743,67 @@ void __fastcall TMainForm::miPropertiesClick(TObject *Sender) {
 }
 
 void TMainForm::ShowElementProperties(TCircuitElement* Element) {
-    String info = "Свойства элемента:\n";
-    info += "Тип: " + Element->Name + "\n";
+    String info = "РЎРІРѕР№СЃС‚РІР° СЌР»РµРјРµРЅС‚Р°:\n";
+    info += "РўРёРї: " + Element->Name + "\n";
     info += "ID: " + IntToStr(static_cast<int>(Element->Id)) + "\n";
-    info += "Позиция: (" + IntToStr(static_cast<int>(Element->Bounds.Left)) + ", " +
+    info += "РџРѕР·РёС†РёСЏ: (" + IntToStr(static_cast<int>(Element->Bounds.Left)) + ", " +
             IntToStr(static_cast<int>(Element->Bounds.Top)) + ")\n";
-    info += "Размер: " + IntToStr(static_cast<int>(Element->Bounds.Width())) + " x " +
+    info += "Р Р°Р·РјРµСЂ: " + IntToStr(static_cast<int>(Element->Bounds.Width())) + " x " +
             IntToStr(static_cast<int>(Element->Bounds.Height())) + "\n";
-    info += "Входы: " + IntToStr(static_cast<int>(Element->Inputs.size())) + "\n";
-    info += "Выходы: " + IntToStr(static_cast<int>(Element->Outputs.size())) + "\n";
+    info += "Р’С…РѕРґС‹: " + IntToStr(static_cast<int>(Element->Inputs.size())) + "\n";
+    info += "Р’С‹С…РѕРґС‹: " + IntToStr(static_cast<int>(Element->Outputs.size())) + "\n";
 
-    // Информация о состоянии
+    // РРЅС„РѕСЂРјР°С†РёСЏ Рѕ СЃРѕСЃС‚РѕСЏРЅРёРё
     String stateStr;
     switch (Element->CurrentState) {
         case TTernary::NEG: stateStr = "-1"; break;
         case TTernary::ZERO: stateStr = "0"; break;
         case TTernary::POS: stateStr = "+1"; break;
     }
-    info += "Текущее состояние: " + stateStr;
+    info += "РўРµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ: " + stateStr;
 
-    Application->MessageBox(info.w_str(), L"Свойства элемента", MB_OK | MB_ICONINFORMATION);
+    Application->MessageBox(info.w_str(), L"РЎРІРѕР№СЃС‚РІР° СЌР»РµРјРµРЅС‚Р°", MB_OK | MB_ICONINFORMATION);
 }
 
 void __fastcall TMainForm::miRotateElementClick(TObject *Sender) {
     if (FSelectedElement) {
-        // Простая реализация поворота - меняем местами ширину и высоту
+        // РџСЂРѕСЃС‚Р°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ РїРѕРІРѕСЂРѕС‚Р° - РјРµРЅСЏРµРј РјРµСЃС‚Р°РјРё С€РёСЂРёРЅСѓ Рё РІС‹СЃРѕС‚Сѓ
         TRect newBounds = FSelectedElement->Bounds;
         int width = newBounds.Width();
         int height = newBounds.Height();
 
-        // Меняем размеры (это упрощенная реализация)
+        // РњРµРЅСЏРµРј СЂР°Р·РјРµСЂС‹ (СЌС‚Рѕ СѓРїСЂРѕС‰РµРЅРЅР°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ)
         newBounds.Right = newBounds.Left + height;
         newBounds.Bottom = newBounds.Top + width;
 
         FSelectedElement->SetBounds(newBounds);
         UpdatePaintBoxSize();
         CircuitImage->Repaint();
-        StatusBar->Panels->Items[0]->Text = "Элемент повернут.";
+        StatusBar->Panels->Items[0]->Text = "Р­Р»РµРјРµРЅС‚ РїРѕРІРµСЂРЅСѓС‚.";
     }
 }
 
 void __fastcall TMainForm::btnZoomInClick(TObject *Sender) {
     FZoomFactor *= 1.2;
     ApplyZoom();
-    StatusBar->Panels->Items[0]->Text = "Увеличение: " + FloatToStrF(FZoomFactor * 100, ffFixed, 3, 0) + "%";
+    StatusBar->Panels->Items[0]->Text = "РЈРІРµР»РёС‡РµРЅРёРµ: " + FloatToStrF(FZoomFactor * 100, ffFixed, 3, 0) + "%";
 }
 
 void __fastcall TMainForm::btnZoomOutClick(TObject *Sender) {
     FZoomFactor /= 1.2;
     if (FZoomFactor < 0.1) FZoomFactor = 0.1;
     ApplyZoom();
-    StatusBar->Panels->Items[0]->Text = "Увеличение: " + FloatToStrF(FZoomFactor * 100, ffFixed, 3, 0) + "%";
+    StatusBar->Panels->Items[0]->Text = "РЈРІРµР»РёС‡РµРЅРёРµ: " + FloatToStrF(FZoomFactor * 100, ffFixed, 3, 0) + "%";
 }
 
 void __fastcall TMainForm::btnZoomFitClick(TObject *Sender) {
     FZoomFactor = 1.0;
     ApplyZoom();
-    StatusBar->Panels->Items[0]->Text = "Увеличение сброшено до 100%";
+    StatusBar->Panels->Items[0]->Text = "РЈРІРµР»РёС‡РµРЅРёРµ СЃР±СЂРѕС€РµРЅРѕ РґРѕ 100%";
 }
 
 void TMainForm::ApplyZoom() {
-    // Масштабируем все элементы
+    // РњР°СЃС€С‚Р°Р±РёСЂСѓРµРј РІСЃРµ СЌР»РµРјРµРЅС‚С‹
     for (auto element : FElements) {
         TRect bounds = element->Bounds;
         bounds.Left = (int)(bounds.Left * FZoomFactor);
@@ -629,7 +813,461 @@ void TMainForm::ApplyZoom() {
         element->SetBounds(bounds);
     }
 
-    // Обновляем размер области рисования
+    // РћР±РЅРѕРІР»СЏРµРј СЂР°Р·РјРµСЂ РѕР±Р»Р°СЃС‚Рё СЂРёСЃРѕРІР°РЅРёСЏ
     UpdatePaintBoxSize();
     CircuitImage->Repaint();
+}
+
+// РњРµС‚РѕРґС‹ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ/Р·Р°РіСЂСѓР·РєРё Рё РіСЂСѓРїРїРёСЂРѕРІРєРё
+void __fastcall TMainForm::btnSaveSchemeClick(TObject *Sender) {
+    if (SaveDialog->Execute()) {
+        try {
+            SaveSchemeToFile(SaveDialog->FileName);
+            StatusBar->Panels->Items[0]->Text = "РЎС…РµРјР° СЃРѕС…СЂР°РЅРµРЅР°: " + SaveDialog->FileName;
+        }
+        catch (Exception &e) {
+            Application->MessageBox(L"РћС€РёР±РєР° РїСЂРё СЃРѕС…СЂР°РЅРµРЅРёРё СЃС…РµРјС‹", L"РћС€РёР±РєР°", MB_OK | MB_ICONERROR);
+        }
+    }
+}
+
+void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
+    if (OpenDialog->Execute()) {
+        try {
+            if (Application->MessageBox(L"Р—Р°РіСЂСѓР·РёС‚СЊ РЅРѕРІСѓСЋ СЃС…РµРјСѓ? РўРµРєСѓС‰Р°СЏ СЃС…РµРјР° Р±СѓРґРµС‚ РїРѕС‚РµСЂСЏРЅР°.",
+                L"РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ", MB_YESNO | MB_ICONQUESTION) == ID_YES) {
+                LoadSchemeFromFile(OpenDialog->FileName);
+                StatusBar->Panels->Items[0]->Text = "РЎС…РµРјР° Р·Р°РіСЂСѓР¶РµРЅР°: " + OpenDialog->FileName;
+            }
+        }
+        catch (Exception &e) {
+            Application->MessageBox(L"РћС€РёР±РєР° РїСЂРё Р·Р°РіСЂСѓР·РєРµ СЃС…РµРјС‹", L"РћС€РёР±РєР°", MB_OK | MB_ICONERROR);
+        }
+    }
+}
+
+void TMainForm::SaveSchemeToFile(const String& FileName) {
+    std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
+
+    // РЎРѕС…СЂР°РЅСЏРµРј РѕР±С‰СѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ
+    iniFile->WriteInteger("Scheme", "ElementCount", static_cast<int>(FElements.size()));
+    iniFile->WriteInteger("Scheme", "ConnectionCount", static_cast<int>(FConnections.size()));
+    iniFile->WriteInteger("Scheme", "NextElementId", FNextElementId);
+
+    // РЎРѕС…СЂР°РЅСЏРµРј СЌР»РµРјРµРЅС‚С‹
+    for (int i = 0; i < FElements.size(); i++) {
+        String section = "Element_" + IntToStr(i);
+        TCircuitElement* element = FElements[i];
+
+        iniFile->WriteString(section, "Type", ElementTypeToString(element->ElementType));
+        iniFile->WriteInteger(section, "Id", element->Id);
+        iniFile->WriteInteger(section, "X", element->Bounds.Left);
+        iniFile->WriteInteger(section, "Y", element->Bounds.Top);
+        iniFile->WriteInteger(section, "Width", element->Bounds.Width());
+        iniFile->WriteInteger(section, "Height", element->Bounds.Height());
+        iniFile->WriteString(section, "Name", element->Name);
+
+        // РЎРѕС…СЂР°РЅСЏРµРј РІС…РѕРґС‹
+        iniFile->WriteInteger(section, "InputCount", static_cast<int>(element->Inputs.size()));
+        for (int j = 0; j < element->Inputs.size(); j++) {
+            String key = "Input_" + IntToStr(j);
+            iniFile->WriteInteger(section, key + "_X", element->Inputs[j].X);
+            iniFile->WriteInteger(section, key + "_Y", element->Inputs[j].Y);
+            iniFile->WriteInteger(section, key + "_Value", static_cast<int>(element->Inputs[j].Value));
+            iniFile->WriteBool(section, key + "_IsInput", element->Inputs[j].IsInput);
+            iniFile->WriteInteger(section, key + "_LineStyle", static_cast<int>(element->Inputs[j].LineStyle));
+        }
+
+        // РЎРѕС…СЂР°РЅСЏРµРј РІС‹С…РѕРґС‹
+        iniFile->WriteInteger(section, "OutputCount", static_cast<int>(element->Outputs.size()));
+        for (int j = 0; j < element->Outputs.size(); j++) {
+            String key = "Output_" + IntToStr(j);
+            iniFile->WriteInteger(section, key + "_X", element->Outputs[j].X);
+            iniFile->WriteInteger(section, key + "_Y", element->Outputs[j].Y);
+            iniFile->WriteInteger(section, key + "_Value", static_cast<int>(element->Outputs[j].Value));
+            iniFile->WriteBool(section, key + "_IsInput", element->Outputs[j].IsInput);
+            iniFile->WriteInteger(section, key + "_LineStyle", static_cast<int>(element->Outputs[j].LineStyle));
+        }
+    }
+
+    // РЎРѕС…СЂР°РЅСЏРµРј СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (int i = 0; i < FConnections.size(); i++) {
+        String section = "Connection_" + IntToStr(i);
+        auto& connection = FConnections[i];
+
+        // РќР°С…РѕРґРёРј РёРЅРґРµРєСЃС‹ СЌР»РµРјРµРЅС‚РѕРІ РґР»СЏ СЃРѕРµРґРёРЅРµРЅРёР№
+        int fromElementIndex = -1;
+        int toElementIndex = -1;
+
+        for (int j = 0; j < FElements.size(); j++) {
+            if (connection.first->Owner == FElements[j]) {
+                fromElementIndex = j;
+            }
+            if (connection.second->Owner == FElements[j]) {
+                toElementIndex = j;
+            }
+        }
+
+        if (fromElementIndex != -1 && toElementIndex != -1) {
+            iniFile->WriteInteger(section, "FromElement", fromElementIndex);
+            iniFile->WriteInteger(section, "ToElement", toElementIndex);
+
+            // РќР°С…РѕРґРёРј РёРЅРґРµРєСЃС‹ С‚РѕС‡РµРє СЃРѕРµРґРёРЅРµРЅРёСЏ РІ РїСЂРµРґРµР»Р°С… СЌР»РµРјРµРЅС‚РѕРІ
+            int fromPointIndex = -1;
+            int toPointIndex = -1;
+
+            TCircuitElement* fromElement = FElements[fromElementIndex];
+            TCircuitElement* toElement = FElements[toElementIndex];
+
+            for (int j = 0; j < fromElement->Outputs.size(); j++) {
+                if (&fromElement->Outputs[j] == connection.first) {
+                    fromPointIndex = j;
+                    break;
+                }
+            }
+
+            for (int j = 0; j < toElement->Inputs.size(); j++) {
+                if (&toElement->Inputs[j] == connection.second) {
+                    toPointIndex = j;
+                    break;
+                }
+            }
+
+            if (fromPointIndex != -1 && toPointIndex != -1) {
+                iniFile->WriteInteger(section, "FromPoint", fromPointIndex);
+                iniFile->WriteInteger(section, "ToPoint", toPointIndex);
+            }
+        }
+    }
+
+    iniFile->UpdateFile();
+}
+
+void TMainForm::LoadSchemeFromFile(const String& FileName) {
+    std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
+
+    // РћС‡РёС‰Р°РµРј С‚РµРєСѓС‰СѓСЋ СЃС…РµРјСѓ
+    btnClearWorkspaceClick(nullptr);
+
+    // Р—Р°РіСЂСѓР¶Р°РµРј РѕР±С‰СѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ
+    int elementCount = iniFile->ReadInteger("Scheme", "ElementCount", 0);
+    int connectionCount = iniFile->ReadInteger("Scheme", "ConnectionCount", 0);
+    FNextElementId = iniFile->ReadInteger("Scheme", "NextElementId", 1);
+
+    // Р—Р°РіСЂСѓР¶Р°РµРј СЌР»РµРјРµРЅС‚С‹
+    std::vector<TCircuitElement*> loadedElements;
+    std::vector<std::vector<TConnectionPoint*>> elementInputs;
+    std::vector<std::vector<TConnectionPoint*>> elementOutputs;
+
+    for (int i = 0; i < elementCount; i++) {
+        String section = "Element_" + IntToStr(i);
+
+        String typeStr = iniFile->ReadString(section, "Type", "");
+        int id = iniFile->ReadInteger(section, "Id", 0);
+        int x = iniFile->ReadInteger(section, "X", 0);
+        int y = iniFile->ReadInteger(section, "Y", 0);
+        int width = iniFile->ReadInteger(section, "Width", 80);
+        int height = iniFile->ReadInteger(section, "Height", 60);
+        String name = iniFile->ReadString(section, "Name", "");
+
+        TCircuitElement* element = CreateElementByTypeName(typeStr, x, y);
+        if (element) {
+            // РСЃРїРѕР»СЊР·СѓРµРј РїСѓР±Р»РёС‡РЅС‹Рµ РјРµС‚РѕРґС‹ РІРјРµСЃС‚Рѕ РїСЂСЏРјРѕРіРѕ РґРѕСЃС‚СѓРїР° Рє protected С‡Р»РµРЅР°Рј
+            element->SetId(id);
+            element->SetBounds(TRect(x, y, x + width, y + height));
+            element->SetName(name);
+
+            // Р—Р°РіСЂСѓР¶Р°РµРј РІС…РѕРґС‹
+            int inputCount = iniFile->ReadInteger(section, "InputCount", 0);
+            std::vector<TConnectionPoint*> inputs;
+            for (int j = 0; j < inputCount; j++) {
+                String key = "Input_" + IntToStr(j);
+                int inputX = iniFile->ReadInteger(section, key + "_X", 0);
+                int inputY = iniFile->ReadInteger(section, key + "_Y", 0);
+                TTernary inputValue = static_cast<TTernary>(iniFile->ReadInteger(section, key + "_Value", 0));
+                bool inputIsInput = iniFile->ReadBool(section, key + "_IsInput", true);
+                TLineStyle inputLineStyle = static_cast<TLineStyle>(iniFile->ReadInteger(section, key + "_LineStyle", 0));
+
+                // РЎРѕР·РґР°РµРј С‚РѕС‡РєСѓ СЃРѕРµРґРёРЅРµРЅРёСЏ
+                TConnectionPoint point(element, inputX, inputY, inputValue, inputIsInput, inputLineStyle);
+                if (j < element->Inputs.size()) {
+                    element->Inputs[j] = point;
+                    inputs.push_back(&element->Inputs[j]);
+                }
+            }
+
+            // Р—Р°РіСЂСѓР¶Р°РµРј РІС‹С…РѕРґС‹
+            int outputCount = iniFile->ReadInteger(section, "OutputCount", 0);
+            std::vector<TConnectionPoint*> outputs;
+            for (int j = 0; j < outputCount; j++) {
+                String key = "Output_" + IntToStr(j);
+                int outputX = iniFile->ReadInteger(section, key + "_X", 0);
+                int outputY = iniFile->ReadInteger(section, key + "_Y", 0);
+                TTernary outputValue = static_cast<TTernary>(iniFile->ReadInteger(section, key + "_Value", 0));
+                bool outputIsInput = iniFile->ReadBool(section, key + "_IsInput", false);
+                TLineStyle outputLineStyle = static_cast<TLineStyle>(iniFile->ReadInteger(section, key + "_LineStyle", 0));
+
+                // РЎРѕР·РґР°РµРј С‚РѕС‡РєСѓ СЃРѕРµРґРёРЅРµРЅРёСЏ
+                TConnectionPoint point(element, outputX, outputY, outputValue, outputIsInput, outputLineStyle);
+                if (j < element->Outputs.size()) {
+                    element->Outputs[j] = point;
+                    outputs.push_back(&element->Outputs[j]);
+                }
+            }
+
+            loadedElements.push_back(element);
+            elementInputs.push_back(inputs);
+            elementOutputs.push_back(outputs);
+            FElements.push_back(element);
+            
+            // Р’С‹С‡РёСЃР»СЏРµРј РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Рµ РїРѕР·РёС†РёРё РґР»СЏ Р·Р°РіСЂСѓР¶РµРЅРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р°
+            element->CalculateRelativePositions();
+        }
+    }
+
+    // Р—Р°РіСЂСѓР¶Р°РµРј СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (int i = 0; i < connectionCount; i++) {
+        String section = "Connection_" + IntToStr(i);
+
+        int fromElementIndex = iniFile->ReadInteger(section, "FromElement", -1);
+        int toElementIndex = iniFile->ReadInteger(section, "ToElement", -1);
+        int fromPointIndex = iniFile->ReadInteger(section, "FromPoint", -1);
+        int toPointIndex = iniFile->ReadInteger(section, "ToPoint", -1);
+
+        if (fromElementIndex >= 0 && fromElementIndex < loadedElements.size() &&
+            toElementIndex >= 0 && toElementIndex < loadedElements.size() &&
+            fromPointIndex >= 0 && fromPointIndex < elementOutputs[fromElementIndex].size() &&
+            toPointIndex >= 0 && toPointIndex < elementInputs[toElementIndex].size()) {
+
+            TConnectionPoint* fromPoint = elementOutputs[fromElementIndex][fromPointIndex];
+            TConnectionPoint* toPoint = elementInputs[toElementIndex][toPointIndex];
+
+            FConnections.push_back(std::make_pair(fromPoint, toPoint));
+        }
+    }
+
+    UpdatePaintBoxSize();
+    CircuitImage->Repaint();
+}
+
+String TMainForm::ElementTypeToString(TElementType Type) {
+    switch (Type) {
+        case TElementType::MAGNETIC_AMPLIFIER: return "MAGNETIC_AMPLIFIER";
+        case TElementType::MAGNETIC_AMPLIFIER_POWER: return "MAGNETIC_AMPLIFIER_POWER";
+        case TElementType::TERNARY_ELEMENT: return "TERNARY_ELEMENT";
+        case TElementType::TERNARY_TRIGGER: return "TERNARY_TRIGGER";
+        case TElementType::TERNARY_ADDER: return "TERNARY_ADDER";
+        case TElementType::HALF_ADDER: return "HALF_ADDER";
+        case TElementType::SHIFT_REGISTER: return "SHIFT_REGISTER";
+        case TElementType::DECODER: return "DECODER";
+        case TElementType::COUNTER: return "COUNTER";
+        case TElementType::LOGIC_AND: return "LOGIC_AND";
+        case TElementType::LOGIC_OR: return "LOGIC_OR";
+        case TElementType::LOGIC_INHIBIT: return "LOGIC_INHIBIT";
+        case TElementType::GENERATOR: return "GENERATOR";
+        case TElementType::SUBCIRCUIT: return "SUBCIRCUIT";
+        default: return "UNKNOWN";
+    }
+}
+
+TElementType TMainForm::StringToElementType(const String& TypeStr) {
+    if (TypeStr == "MAGNETIC_AMPLIFIER") return TElementType::MAGNETIC_AMPLIFIER;
+    if (TypeStr == "MAGNETIC_AMPLIFIER_POWER") return TElementType::MAGNETIC_AMPLIFIER_POWER;
+    if (TypeStr == "TERNARY_ELEMENT") return TElementType::TERNARY_ELEMENT;
+    if (TypeStr == "TERNARY_TRIGGER") return TElementType::TERNARY_TRIGGER;
+    if (TypeStr == "TERNARY_ADDER") return TElementType::TERNARY_ADDER;
+    if (TypeStr == "HALF_ADDER") return TElementType::HALF_ADDER;
+    if (TypeStr == "SHIFT_REGISTER") return TElementType::SHIFT_REGISTER;
+    if (TypeStr == "DECODER") return TElementType::DECODER;
+    if (TypeStr == "COUNTER") return TElementType::COUNTER;
+    if (TypeStr == "LOGIC_AND") return TElementType::LOGIC_AND;
+    if (TypeStr == "LOGIC_OR") return TElementType::LOGIC_OR;
+    if (TypeStr == "LOGIC_INHIBIT") return TElementType::LOGIC_INHIBIT;
+    if (TypeStr == "GENERATOR") return TElementType::GENERATOR;
+    if (TypeStr == "SUBCIRCUIT") return TElementType::SUBCIRCUIT;
+    return TElementType::TERNARY_ELEMENT;
+}
+
+TCircuitElement* TMainForm::CreateElementByTypeName(const String& TypeName, int X, int Y) {
+    TElementType type = StringToElementType(TypeName);
+
+    TCircuitElement* element = nullptr;
+    
+    switch (type) {
+        case TElementType::MAGNETIC_AMPLIFIER:
+            element = new TMagneticAmplifier(FNextElementId++, X, Y, false);
+            break;
+        case TElementType::MAGNETIC_AMPLIFIER_POWER:
+            element = new TMagneticAmplifier(FNextElementId++, X, Y, true);
+            break;
+        case TElementType::TERNARY_ELEMENT:
+            element = new TTernaryElement(FNextElementId++, X, Y);
+            break;
+        case TElementType::TERNARY_TRIGGER:
+            element = new TTernaryTrigger(FNextElementId++, X, Y);
+            break;
+        case TElementType::HALF_ADDER:
+            element = new THalfAdder(FNextElementId++, X, Y);
+            break;
+        case TElementType::TERNARY_ADDER:
+            element = new TTernaryAdder(FNextElementId++, X, Y);
+            break;
+        case TElementType::DECODER:
+            element = new TDecoder(FNextElementId++, X, Y, 2);
+            break;
+        case TElementType::COUNTER:
+            element = new TCounter(FNextElementId++, X, Y, 3);
+            break;
+        case TElementType::SHIFT_REGISTER:
+            element = new TShiftRegister(FNextElementId++, X, Y, 4);
+            break;
+        case TElementType::LOGIC_AND:
+            element = new TLogicAnd(FNextElementId++, X, Y);
+            break;
+        case TElementType::LOGIC_OR:
+            element = new TLogicOr(FNextElementId++, X, Y);
+            break;
+        case TElementType::LOGIC_INHIBIT:
+            element = new TLogicInhibit(FNextElementId++, X, Y);
+            break;
+        case TElementType::GENERATOR:
+            element = new TGenerator(FNextElementId++, X, Y);
+            break;
+        default:
+            element = new TTernaryElement(FNextElementId++, X, Y);
+    }
+
+    if (element) {
+        element->CalculateRelativePositions();
+    }
+
+    return element;
+}
+
+// РњРµС‚РѕРґС‹ РґР»СЏ РіСЂСѓРїРїРёСЂРѕРІРєРё СЌР»РµРјРµРЅС‚РѕРІ
+void __fastcall TMainForm::btnGroupElementsClick(TObject *Sender) {
+    CreateSubCircuitFromSelection();
+}
+
+void __fastcall TMainForm::btnUngroupElementsClick(TObject *Sender) {
+    if (FSelectedElement) {
+        // РџСЂРѕРІРµСЂСЏРµРј, СЏРІР»СЏРµС‚СЃСЏ Р»Рё РІС‹Р±СЂР°РЅРЅС‹Р№ СЌР»РµРјРµРЅС‚ РїРѕРґСЃС…РµРјРѕР№
+        TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(FSelectedElement);
+        if (subCircuit) {
+            UngroupSubCircuit(subCircuit);
+        } else {
+            StatusBar->Panels->Items[0]->Text = "Р’С‹Р±СЂР°РЅРЅС‹Р№ СЌР»РµРјРµРЅС‚ РЅРµ СЏРІР»СЏРµС‚СЃСЏ РїРѕРґСЃС…РµРјРѕР№";
+        }
+    } else {
+        StatusBar->Panels->Items[0]->Text = "РќРµ РІС‹Р±СЂР°РЅР° РїРѕРґСЃС…РµРјР° РґР»СЏ СЂР°Р·РіСЂСѓРїРїРёСЂРѕРІРєРё";
+    }
+}
+
+std::vector<TCircuitElement*> TMainForm::GetSelectedElements() {
+    // Р’РѕР·РІСЂР°С‰Р°РµРј РІСЃРµ РІС‹РґРµР»РµРЅРЅС‹Рµ СЌР»РµРјРµРЅС‚С‹
+    return FSelectedElements;
+}
+
+void TMainForm::CreateSubCircuitFromSelection() {
+    auto selectedElements = GetSelectedElements();
+
+    if (selectedElements.size() < 2) {
+        StatusBar->Panels->Items[0]->Text = "Р’С‹Р±РµСЂРёС‚Рµ С…РѕС‚СЏ Р±С‹ 2 СЌР»РµРјРµРЅС‚Р° РґР»СЏ РіСЂСѓРїРїРёСЂРѕРІРєРё";
+        return;
+    }
+
+    // Р’С‹С‡РёСЃР»СЏРµРј РѕР±С‰РёРµ РіСЂР°РЅРёС†С‹ РІС‹РґРµР»РµРЅРЅС‹С… СЌР»РµРјРµРЅС‚РѕРІ
+    if (selectedElements.empty()) return;
+    
+    TRect totalBounds = selectedElements[0]->Bounds;
+    for (auto element : selectedElements) {
+        totalBounds.Left = std::min(totalBounds.Left, element->Bounds.Left);
+        totalBounds.Top = std::min(totalBounds.Top, element->Bounds.Top);
+        totalBounds.Right = std::max(totalBounds.Right, element->Bounds.Right);
+        totalBounds.Bottom = std::max(totalBounds.Bottom, element->Bounds.Bottom);
+    }
+
+    int centerX = (totalBounds.Left + totalBounds.Right) / 2;
+    int centerY = (totalBounds.Top + totalBounds.Bottom) / 2;
+
+    // РќР°С…РѕРґРёРј СЃРѕРµРґРёРЅРµРЅРёСЏ РјРµР¶РґСѓ РІС‹Р±СЂР°РЅРЅС‹РјРё СЌР»РµРјРµРЅС‚Р°РјРё
+    std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> internalConnections;
+    for (auto& connection : FConnections) {
+        bool fromSelected = false;
+        bool toSelected = false;
+
+        for (auto element : selectedElements) {
+            if (connection.first->Owner == element) fromSelected = true;
+            if (connection.second->Owner == element) toSelected = true;
+        }
+
+        if (fromSelected && toSelected) {
+            internalConnections.push_back(connection);
+        }
+    }
+
+    // РЎРѕР·РґР°РµРј РїРѕРґСЃС…РµРјСѓ
+    TSubCircuit* subCircuit = new TSubCircuit(FNextElementId++, centerX, centerY,
+                                             selectedElements, internalConnections);
+
+    // РЈРґР°Р»СЏРµРј РёСЃС…РѕРґРЅС‹Рµ СЌР»РµРјРµРЅС‚С‹ Рё СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (auto element : selectedElements) {
+        auto it = std::find(FElements.begin(), FElements.end(), element);
+        if (it != FElements.end()) {
+            delete *it;
+            FElements.erase(it);
+        }
+    }
+
+    // РЈРґР°Р»СЏРµРј РІРЅСѓС‚СЂРµРЅРЅРёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (auto& internalConn : internalConnections) {
+        auto it = std::find(FConnections.begin(), FConnections.end(), internalConn);
+        if (it != FConnections.end()) {
+            FConnections.erase(it);
+        }
+    }
+
+    // Р”РѕР±Р°РІР»СЏРµРј РїРѕРґСЃС…РµРјСѓ
+    FElements.push_back(subCircuit);
+    FSelectedElement = subCircuit;
+    FSelectedElements.clear();
+    FSelectedElements.push_back(subCircuit);
+
+    UpdatePaintBoxSize();
+    CircuitImage->Repaint();
+    StatusBar->Panels->Items[0]->Text = "РЎРѕР·РґР°РЅР° РїРѕРґСЃС…РµРјР° РёР· " + IntToStr(static_cast<int>(selectedElements.size())) + " СЌР»РµРјРµРЅС‚РѕРІ";
+}
+
+void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
+    TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(SubCircuit);
+    if (!subCircuit) return;
+
+    // РџРѕР»СѓС‡Р°РµРј РґРѕСЃС‚СѓРї Рє РІРЅСѓС‚СЂРµРЅРЅРёРј СЌР»РµРјРµРЅС‚Р°Рј Рё СЃРѕРµРґРёРЅРµРЅРёСЏРј С‡РµСЂРµР· РіРµС‚С‚РµСЂС‹
+    const auto& internalElements = subCircuit->GetInternalElements();
+    const auto& internalConnections = subCircuit->GetInternalConnections();
+
+    // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РёСЃС…РѕРґРЅС‹Рµ СЌР»РµРјРµРЅС‚С‹
+    for (auto element : internalElements) {
+        FElements.push_back(element);
+    }
+
+    // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІРЅСѓС‚СЂРµРЅРЅРёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ
+    for (auto& connection : internalConnections) {
+        FConnections.push_back(connection);
+    }
+
+    // РЈРґР°Р»СЏРµРј РїРѕРґСЃС…РµРјСѓ РёР· СЃРїРёСЃРєР° СЌР»РµРјРµРЅС‚РѕРІ
+    auto it = std::find(FElements.begin(), FElements.end(), SubCircuit);
+    if (it != FElements.end()) {
+        FElements.erase(it);
+    }
+
+    // РЈРґР°Р»СЏРµРј РѕР±СЉРµРєС‚ РїРѕРґСЃС…РµРјС‹
+    delete SubCircuit;
+    FSelectedElement = nullptr;
+    FSelectedElements.clear();
+
+    UpdatePaintBoxSize();
+    CircuitImage->Repaint();
+    StatusBar->Panels->Items[0]->Text = "РџРѕРґСЃС…РµРјР° СЂР°Р·РіСЂСѓРїРїРёСЂРѕРІР°РЅР°";
 }

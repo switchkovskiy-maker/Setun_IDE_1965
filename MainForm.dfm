@@ -70,8 +70,18 @@ object MainForm: TMainForm
         Caption = #1057#1086#1077#1076#1080#1085#1077#1085#1080#1103
         OnClick = btnConnectionModeClick
       end
-      object btnZoomIn: TButton
+      object btnMultiSelect: TSpeedButton
         Left = 350
+        Top = 0
+        Width = 100
+        Height = 44
+        AllowAllUp = True
+        GroupIndex = 2
+        Caption = #1042#1099#1076#1077#1083#1077#1085#1080#1077
+        OnClick = btnMultiSelectClick
+      end
+      object btnZoomIn: TButton
+        Left = 450
         Top = 0
         Width = 75
         Height = 44
@@ -80,7 +90,7 @@ object MainForm: TMainForm
         OnClick = btnZoomInClick
       end
       object btnZoomOut: TButton
-        Left = 425
+        Left = 525
         Top = 0
         Width = 75
         Height = 44
@@ -89,13 +99,49 @@ object MainForm: TMainForm
         OnClick = btnZoomOutClick
       end
       object btnZoomFit: TButton
-        Left = 500
+        Left = 600
         Top = 0
         Width = 75
         Height = 44
         Caption = #1055#1086#1076#1086#1075#1085#1072#1090#1100
         TabOrder = 5
         OnClick = btnZoomFitClick
+      end
+      object btnSaveScheme: TButton
+        Left = 675
+        Top = 0
+        Width = 75
+        Height = 44
+        Caption = #1057#1086#1093#1088#1072#1085#1080#1090#1100
+        TabOrder = 6
+        OnClick = btnSaveSchemeClick
+      end
+      object btnLoadScheme: TButton
+        Left = 750
+        Top = 0
+        Width = 75
+        Height = 44
+        Caption = #1047#1072#1075#1088#1091#1079#1080#1090#1100
+        TabOrder = 7
+        OnClick = btnLoadSchemeClick
+      end
+      object btnGroupElements: TButton
+        Left = 825
+        Top = 0
+        Width = 100
+        Height = 44
+        Caption = #1043#1088#1091#1087#1087#1080#1088#1086#1074#1072#1090#1100
+        TabOrder = 8
+        OnClick = btnGroupElementsClick
+      end
+      object btnUngroupElements: TButton
+        Left = 925
+        Top = 0
+        Width = 100
+        Height = 44
+        Caption = #1056#1072#1079#1075#1088#1091#1087#1087#1080#1088#1086#1074#1072#1090#1100
+        TabOrder = 9
+        OnClick = btnUngroupElementsClick
       end
     end
   end
@@ -110,10 +156,10 @@ object MainForm: TMainForm
     object LibraryLabel: TLabel
       Left = 1
       Top = 1
-      Width = 257
+      Width = 265
       Height = 16
       Align = alTop
-      Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072' '#1101#1083#1077#1084#1077#1085#1090#1086#1074' ('#1057#1077#1090#1091#1085#1100', 1965)'
+      Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072' '#1101#1083#1077#1084#1077#1085#1090#1086#1074' ('#1057#1077#1091#1090#1091#1085#1100', 1965)'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -13
@@ -193,5 +239,18 @@ object MainForm: TMainForm
       Caption = #1059#1076#1072#1083#1080#1090#1100
       OnClick = miDeleteElementClick
     end
+  end
+  object SaveDialog: TSaveDialog
+    DefaultExt = 'setun'
+    Filter = 'Setun Scheme Files (*.setun)|*.setun|All files (*.*)|*.*'
+    Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
+    Left = 480
+    Top = 200
+  end
+  object OpenDialog: TOpenDialog
+    DefaultExt = 'setun'
+    Filter = 'Setun Scheme Files (*.setun)|*.setun|All files (*.*)|*.*'
+    Left = 560
+    Top = 200
   end
 end

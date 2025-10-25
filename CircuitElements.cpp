@@ -10,13 +10,13 @@ TTernaryTrigger::TTernaryTrigger(int AId, int X, int Y)
     FBounds = TRect(X, Y, X + 120, Y + 80);
 
     // Входы: установка в 1, установка в -1, сброс
-    FInputs.push_back(TConnectionPoint(X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+60, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+60, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
 
     // Выходы: прямой и инверсный
-    FOutputs.push_back(TConnectionPoint(X+135, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
-    FOutputs.push_back(TConnectionPoint(X+135, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, X+135, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, X+135, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TTernaryTrigger::Calculate() {
@@ -103,10 +103,10 @@ THalfAdder::THalfAdder(int AId, int X, int Y)
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
 
-    FInputs.push_back(TConnectionPoint(X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FOutputs.push_back(TConnectionPoint(X+95, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
-    FOutputs.push_back(TConnectionPoint(X+95, Y+40, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FOutputs.push_back(TConnectionPoint(this, X+95, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, X+95, Y+40, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void THalfAdder::Calculate() {
@@ -179,11 +179,11 @@ TTernaryAdder::TTernaryAdder(int AId, int X, int Y)
 
     FBounds = TRect(X, Y, X + 100, Y + 80);
 
-    FInputs.push_back(TConnectionPoint(X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+60, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FOutputs.push_back(TConnectionPoint(X+115, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
-    FOutputs.push_back(TConnectionPoint(X+115, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+60, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FOutputs.push_back(TConnectionPoint(this, X+115, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, X+115, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TTernaryAdder::Calculate() {
@@ -269,12 +269,12 @@ TDecoder::TDecoder(int AId, int X, int Y, int InputBits)
 
     // Входы
     for (int i = 0; i < FInputBits; i++) {
-        FInputs.push_back(TConnectionPoint(X-15, Y+20 + i*15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+        FInputs.push_back(TConnectionPoint(this, X-15, Y+20 + i*15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     }
 
     // Выходы
     for (int i = 0; i < FOutputCount; i++) {
-        FOutputs.push_back(TConnectionPoint(X+95, Y+15 + i*15, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+        FOutputs.push_back(TConnectionPoint(this, X+95, Y+15 + i*15, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     }
 }
 
@@ -336,9 +336,9 @@ TCounter::TCounter(int AId, int X, int Y, int BitCount)
 
     FBounds = TRect(X, Y, X + 40 + BitCount * 25, Y + 60);
 
-    FInputs.push_back(TConnectionPoint(X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // +1
-    FInputs.push_back(TConnectionPoint(X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // -1
-    FOutputs.push_back(TConnectionPoint(X+FBounds.Width()+5, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // +1
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // -1
+    FOutputs.push_back(TConnectionPoint(this, X+FBounds.Width()+5, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TCounter::Calculate() {
@@ -406,9 +406,9 @@ TLogicAnd::TLogicAnd(int AId, int X, int Y)
     : TCircuitElement(AId, "AND", TElementType::LOGIC_AND, X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
-    FInputs.push_back(TConnectionPoint(X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FOutputs.push_back(TConnectionPoint(X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FOutputs.push_back(TConnectionPoint(this, X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TLogicAnd::Calculate() {
@@ -446,9 +446,9 @@ TLogicOr::TLogicOr(int AId, int X, int Y)
     : TCircuitElement(AId, "OR", TElementType::LOGIC_OR, X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
-    FInputs.push_back(TConnectionPoint(X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FInputs.push_back(TConnectionPoint(X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
-    FOutputs.push_back(TConnectionPoint(X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FOutputs.push_back(TConnectionPoint(this, X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TLogicOr::Calculate() {
@@ -484,9 +484,9 @@ TLogicInhibit::TLogicInhibit(int AId, int X, int Y)
     : TCircuitElement(AId, "INH", TElementType::LOGIC_INHIBIT, X, Y) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
-    FInputs.push_back(TConnectionPoint(X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // A
-    FInputs.push_back(TConnectionPoint(X-15, Y+40, TTernary::ZERO, true, TLineStyle::NEGATIVE_CONTROL)); // B (запрет)
-    FOutputs.push_back(TConnectionPoint(X+95, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL)); // A
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::NEGATIVE_CONTROL)); // B (запрет)
+    FOutputs.push_back(TConnectionPoint(this, X+95, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TLogicInhibit::Calculate() {
@@ -524,7 +524,7 @@ TGenerator::TGenerator(int AId, int X, int Y)
     : TCircuitElement(AId, "Gen", TElementType::GENERATOR, X, Y) {
 
     FBounds = TRect(X, Y, X + 50, Y + 30);
-    FOutputs.push_back(TConnectionPoint(X+65, Y+15, TTernary::POS, false, TLineStyle::OUTPUT_LINE));
+    FOutputs.push_back(TConnectionPoint(this, X+65, Y+15, TTernary::POS, false, TLineStyle::OUTPUT_LINE));
 }
 
 void TGenerator::Calculate() {
@@ -546,4 +546,50 @@ void TGenerator::Draw(TCanvas* Canvas) {
 
     // Рисуем точки соединения
     DrawConnectionPoints(Canvas);
+}
+
+// Распределитель импульсов (стр. 56, рис. 11) - заглушка
+TDistributor::TDistributor(int AId, int X, int Y, int Steps)
+    : TCircuitElement(AId, "Dist", TElementType::DISTRIBUTOR, X, Y),
+      FCurrentStep(0), FTotalSteps(Steps) {
+
+    FBounds = TRect(X, Y, X + 80, Y + 60);
+    // Заглушка - нужно реализовать
+}
+
+void TDistributor::Calculate() {
+    // Заглушка
+}
+
+void TDistributor::Draw(TCanvas* Canvas) {
+    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Dist");
+    DrawConnectionPoints(Canvas);
+}
+
+void TDistributor::AdvanceStep() {
+    FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
+}
+
+// Переключатель (стр. 55, рис. 10) - заглушка
+TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
+    : TCircuitElement(AId, "Switch", TElementType::SWITCH, X, Y),
+      FSelectedOutput(0) {
+
+    FBounds = TRect(X, Y, X + 60, Y + 40);
+    // Заглушка - нужно реализовать
+}
+
+void TSwitch::Calculate() {
+    // Заглушка
+}
+
+void TSwitch::Draw(TCanvas* Canvas) {
+    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Switch");
+    DrawConnectionPoints(Canvas);
+}
+
+void TSwitch::SetSelection(int OutputIndex) {
+    FSelectedOutput = OutputIndex;
 }

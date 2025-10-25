@@ -5,6 +5,9 @@
 #include <vector>
 #include <map>
 
+// Предварительное объявление
+class TCircuitElement;
+
 // Троичные значения
 enum class TTernary { NEG = -1, ZERO = 0, POS = 1 };
 
@@ -24,7 +27,8 @@ enum class TElementType {
     LOGIC_AND,                   // Схема И (стр. 49)
     LOGIC_OR,                    // Схема ИЛИ (стр. 49)
     LOGIC_INHIBIT,               // Схема запрета (стр. 47)
-    GENERATOR                    // Генератор единиц (стр. 50)
+    GENERATOR,                   // Генератор единиц (стр. 50)
+    SUBCIRCUIT                   // Подсхема (новый тип для группировки)
 };
 
 // Стили линий согласно книге (стр. 49)
@@ -37,13 +41,19 @@ enum class TLineStyle {
 
 // Базовая структура точки соединения
 struct TConnectionPoint {
+    TCircuitElement* Owner;
     int X, Y;
     TTernary Value;
     bool IsInput;
-    TLineStyle LineStyle;  // Стиль соединения согласно книге
+    TLineStyle LineStyle;
+    double RelX, RelY;  // Относительные координаты (0-1)
     
+    TConnectionPoint(TCircuitElement* owner, int x, int y, TTernary val, bool isInput, TLineStyle style) 
+        : Owner(owner), X(x), Y(y), Value(val), IsInput(isInput), LineStyle(style), RelX(0), RelY(0) {}
+        
+    // Конструктор по умолчанию для обратной совместимости
     TConnectionPoint(int x, int y, TTernary val, bool isInput, TLineStyle style) 
-        : X(x), Y(y), Value(val), IsInput(isInput), LineStyle(style) {}
+        : Owner(nullptr), X(x), Y(y), Value(val), IsInput(isInput), LineStyle(style), RelX(0), RelY(0) {}
 };
 
 #endif
