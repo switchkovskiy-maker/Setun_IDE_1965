@@ -15,7 +15,7 @@ TMainForm *MainForm;
 __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FNextElementId(1),
-    FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0) {
+    FDragOffsetX(0), FDragOffsetY(0) {
 }
 
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
@@ -55,39 +55,24 @@ void __fastcall TMainForm::WorkspaceResize(TObject *Sender) {
 
 void TMainForm::UpdatePaintBoxSize() {
     if (FElements.empty()) {
-        // Минимальный размер, если нет элементов
-        CircuitImage->Width = Workspace->ClientWidth;
-        CircuitImage->Height = Workspace->ClientHeight;
+        // Минимальный размер
+        CircuitImage->Width = std::max(Workspace->ClientWidth, 800);
+        CircuitImage->Height = std::max(Workspace->ClientHeight, 600);
     } else {
         // Вычисляем границы всех элементов
         TRect bounds = GetCircuitBounds();
 
         // Добавляем отступы
-        int padding = 100;
-        int newWidth = bounds.Width() + padding * 2;
-        int newHeight = bounds.Height() + padding * 2;
+        int padding = 200;
+        int newWidth = bounds.Width() + padding;
+        int newHeight = bounds.Height() + padding;
 
         // Обеспечиваем минимальный размер
-        if (newWidth < Workspace->ClientWidth) newWidth = Workspace->ClientWidth;
-        if (newHeight < Workspace->ClientHeight) newHeight = Workspace->ClientHeight;
+        newWidth = std::max(newWidth, Workspace->ClientWidth);
+        newHeight = std::max(newHeight, Workspace->ClientHeight);
 
         CircuitImage->Width = newWidth;
         CircuitImage->Height = newHeight;
-
-        // Сдвигаем все элементы, если они выходят за левую/верхнюю границу
-        if (bounds.Left < padding || bounds.Top < padding) {
-            int deltaX = padding - bounds.Left;
-            int deltaY = padding - bounds.Top;
-
-            for (auto element : FElements) {
-                TRect newBounds = element->Bounds;
-                newBounds.Left += deltaX;
-                newBounds.Top += deltaY;
-                newBounds.Right += deltaX;
-                newBounds.Bottom += deltaY;
-                element->SetBounds(newBounds);
-            }
-        }
     }
 }
 

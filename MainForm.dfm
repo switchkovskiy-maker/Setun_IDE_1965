@@ -110,7 +110,7 @@ object MainForm: TMainForm
     object LibraryLabel: TLabel
       Left = 1
       Top = 1
-      Width = 248
+      Width = 257
       Height = 16
       Align = alTop
       Caption = #1041#1080#1073#1083#1080#1086#1090#1077#1082#1072' '#1101#1083#1077#1084#1077#1085#1090#1086#1074' ('#1057#1077#1090#1091#1085#1100', 1965)'
@@ -120,7 +120,6 @@ object MainForm: TMainForm
       Font.Name = 'Tahoma'
       Font.Style = [fsBold]
       ParentFont = False
-      ExplicitWidth = 257
     end
     object ElementLibrary: TListBox
       Left = 1
@@ -131,7 +130,6 @@ object MainForm: TMainForm
       ItemHeight = 13
       TabOrder = 0
       OnDblClick = ElementLibraryDblClick
-      ExplicitHeight = 613
     end
   end
   object WorkspacePanel: TPanel

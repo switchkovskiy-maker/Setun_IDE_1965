@@ -1,4 +1,4 @@
-#ifndef CircuitElementsH
+﻿#ifndef CircuitElementsH
 #define CircuitElementsH
 
 #include "CircuitElement.h"
