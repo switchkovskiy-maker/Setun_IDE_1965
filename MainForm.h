@@ -17,8 +17,12 @@
 #include <System.JSON.hpp>
 #include <Vcl.Dialogs.hpp>
 #include <Vcl.Buttons.hpp>
+#include <windows.h>
 
 class TSubCircuit;
+
+// Тип функции для регистрации библиотеки в DLL
+typedef bool (__stdcall *TRegisterLibraryFunction)(TLibraryManager*);
 
 class TMainForm : public TForm {
 __published:
@@ -98,6 +102,7 @@ private:
     double FZoomFactor;
     int FScrollOffsetX;
     int FScrollOffsetY;
+    HINSTANCE FStandardLibraryHandle;
     
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
@@ -120,6 +125,8 @@ private:
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
     void UpdateLibrarySelector();
     void LoadCurrentLibrary();
+    bool LoadStandardLibrary();
+    void UnloadStandardLibrary();
     
 public:
     __fastcall TMainForm(TComponent* Owner);
@@ -145,4 +152,5 @@ private:
 };
 
 extern PACKAGE TMainForm *MainForm;
+
 #endif

@@ -2,7 +2,6 @@
 #include "CircuitElement.h"
 #include "CircuitElements.h"
 #include "ComponentLibrary.h"
-#include "StandardLibrary.h"
 #include <Vcl.Dialogs.hpp>
 #include <Vcl.Graphics.hpp>
 #include <math.h>
@@ -127,13 +126,20 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FIsMultiSelecting(false),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
-    FScrollOffsetX(0), FScrollOffsetY(0) {
+    FScrollOffsetX(0), FScrollOffsetY(0), FStandardLibraryHandle(0) {
 }
 
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
     // Инициализируем менеджер библиотек
     LibraryManager = std::make_unique<TLibraryManager>();
-    RegisterStandardLibrary();
+    
+    // Загружаем стандартную библиотеку из DLL
+    if (!LoadStandardLibrary()) {
+        Application->MessageBox(L"Не удалось загрузить стандартную библиотеку элементов (StandardLibrary.dll).\nПриложение будет закрыто.", 
+                               L"Ошибка загрузки", MB_OK | MB_ICONERROR);
+        Application->Terminate();
+        return;
+    }
     
     CreateCompleteLibrary();
     CircuitImage->Align = alNone;
@@ -157,7 +163,80 @@ void __fastcall TMainForm::FormDestroy(TObject *Sender) {
     for (auto element : FElements) {
         delete element;
     }
+    
+    UnloadStandardLibrary();
     LibraryManager.reset(); // Освобождаем менеджер библиотек
+}
+
+bool TMainForm::LoadStandardLibrary() {
+    // Получаем текущую директорию приложения
+    String currentDir = GetCurrentDir();
+    String dllPath = currentDir + "\\StandardLibrary.dll";
+    
+    // Проверяем существование файла
+    if (!FileExists(dllPath)) {
+        String errorMsg = L"DLL файл не найден по пути:\n" + dllPath + 
+                         L"\n\nУбедитесь, что StandardLibrary.dll находится в той же папке, что и SetunIDE.exe";
+        Application->MessageBox(errorMsg.w_str(), L"Файл не найден", MB_OK | MB_ICONERROR);
+        return false;
+    }
+    
+    FStandardLibraryHandle = LoadLibrary(dllPath.w_str());
+    
+    if (!FStandardLibraryHandle) {
+        DWORD errorCode = GetLastError();
+        String errorMsg = L"Ошибка загрузки DLL. Код ошибки: " + IntToStr(static_cast<int>(errorCode));
+        Application->MessageBox(errorMsg.w_str(), L"Ошибка загрузки DLL", MB_OK | MB_ICONERROR);
+        return false;
+    }
+    
+    // Пробуем найти функцию под разными именами
+    TRegisterLibraryFunction registerFunc = nullptr;
+    
+    // Основное имя
+    registerFunc = reinterpret_cast<TRegisterLibraryFunction>(
+        GetProcAddress(FStandardLibraryHandle, "RegisterStandardLibrary"));
+    
+    // Если не найдено, пробуем декорированное имя для __stdcall
+    if (!registerFunc) {
+        registerFunc = reinterpret_cast<TRegisterLibraryFunction>(
+            GetProcAddress(FStandardLibraryHandle, "_RegisterStandardLibrary@4"));
+    }
+    
+    if (!registerFunc) {
+        String errorMsg = L"Функция RegisterStandardLibrary не найдена в DLL.\n\n"
+                         L"Возможные причины:\n"
+                         L"1. Функция не экспортируется из DLL\n"
+                         L"2. Неправильное соглашение вызовов (cdecl vs stdcall)\n"
+                         L"3. Разные настройки компиляции DLL и EXE";
+        Application->MessageBox(errorMsg.w_str(), L"Ошибка поиска функции", MB_OK | MB_ICONERROR);
+        FreeLibrary(FStandardLibraryHandle);
+        FStandardLibraryHandle = 0;
+        return false;
+    }
+    
+    // Пробуем вызвать функцию
+    try {
+        bool result = registerFunc(LibraryManager.get());
+        if (!result) {
+            Application->MessageBox(L"Функция RegisterStandardLibrary вернула false", 
+                                   L"Ошибка регистрации", MB_OK | MB_ICONERROR);
+            return false;
+        }
+        return true;
+    }
+    catch (...) {
+        Application->MessageBox(L"Исключение при вызове RegisterStandardLibrary", 
+                               L"Ошибка выполнения", MB_OK | MB_ICONERROR);
+        return false;
+    }
+}
+
+void TMainForm::UnloadStandardLibrary() {
+    if (FStandardLibraryHandle) {
+        FreeLibrary(FStandardLibraryHandle);
+        FStandardLibraryHandle = 0;
+    }
 }
 
 void __fastcall TMainForm::FormResize(TObject *Sender) {
@@ -242,7 +321,6 @@ void __fastcall TMainForm::cmbLibrarySelectorChange(TObject *Sender) {
 }
 
 void TMainForm::CreateCompleteLibrary() {
-    // Теперь библиотека загружается через LibraryManager
     UpdateLibrarySelector();
 }
 
