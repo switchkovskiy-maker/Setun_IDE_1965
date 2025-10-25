@@ -15,8 +15,8 @@
 #include <System.Classes.hpp>
 #include <System.JSON.hpp>
 #include <Vcl.Dialogs.hpp>
+#include <Vcl.Buttons.hpp>
 
-// Предварительное объявление класса подсхемы
 class TSubCircuit;
 
 class TMainForm : public TForm {
@@ -32,7 +32,7 @@ __published:
     TButton *btnResetSimulation;
     TButton *btnClearWorkspace;
     TSpeedButton *btnConnectionMode;
-    TSpeedButton *btnMultiSelect;  // Добавляем кнопку множественного выделения
+    TSpeedButton *btnMultiSelect;
     TListBox *ElementLibrary;
     TLabel *LibraryLabel;
     TPopupMenu *ElementPopupMenu;
@@ -63,7 +63,7 @@ __published:
     void __fastcall btnResetSimulationClick(TObject *Sender);
     void __fastcall btnClearWorkspaceClick(TObject *Sender);
     void __fastcall btnConnectionModeClick(TObject *Sender);
-    void __fastcall btnMultiSelectClick(TObject *Sender);  // Обработчик множественного выделения
+    void __fastcall btnMultiSelectClick(TObject *Sender);
     void __fastcall ElementLibraryDblClick(TObject *Sender);
     void __fastcall miDeleteElementClick(TObject *Sender);
     void __fastcall miPropertiesClick(TObject *Sender);
@@ -81,29 +81,31 @@ private:
     std::vector<TCircuitElement*> FElements;
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> FConnections;
     TCircuitElement* FSelectedElement;
-    std::vector<TCircuitElement*> FSelectedElements;  // Множественное выделение
+    std::vector<TCircuitElement*> FSelectedElements;
     TCircuitElement* FDraggedElement;
     TConnectionPoint* FConnectionStart;
     bool FIsConnecting;
     bool FIsDragging;
-    bool FIsMultiSelecting;  // Режим множественного выделения
-    TRect FSelectionRect;    // Прямоугольник выделения
+    bool FIsMultiSelecting;
+    TRect FSelectionRect;
     int FNextElementId;
     int FDragOffsetX;
     int FDragOffsetY;
     double FZoomFactor;
+    int FScrollOffsetX;
+    int FScrollOffsetY;
     
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
     void RunSimulationStep();
     void ResetSimulation();
     void CreateCompleteLibrary();
-    void UpdateElementPositions();
     TCircuitElement* CreateElementByType(const String& ElementDesc, int X, int Y);
     TCircuitElement* CreateElementByTypeName(const String& TypeName, int X, int Y);
     void ShowElementProperties(TCircuitElement* Element);
     void UpdatePaintBoxSize();
     void ApplyZoom();
+    void CenterCircuit();
     TRect GetCircuitBounds();
     void SaveSchemeToFile(const String& FileName);
     void LoadSchemeFromFile(const String& FileName);
@@ -117,7 +119,6 @@ public:
     __fastcall TMainForm(TComponent* Owner);
 };
 
-// Класс подсхемы
 class TSubCircuit : public TCircuitElement {
 private:
     std::vector<TCircuitElement*> FInternalElements;
@@ -129,7 +130,6 @@ public:
     void Calculate() override;
     void Draw(TCanvas* Canvas) override;
     
-    // Геттеры для доступа к внутренним данным
     const std::vector<TCircuitElement*>& GetInternalElements() const { return FInternalElements; }
     const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& GetInternalConnections() const { return FInternalConnections; }
     
