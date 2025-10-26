@@ -19,21 +19,6 @@
 #include <Vcl.Buttons.hpp>
 #include <windows.h>
 
-// Forward declarations
-class TSubCircuit;
-class TMagneticAmplifier;
-class TTernaryElement;
-class TTernaryTrigger;
-class THalfAdder;
-class TTernaryAdder;
-class TDecoder;
-class TCounter;
-class TShiftRegister;
-class TLogicAnd;
-class TLogicOr;
-class TLogicInhibit;
-class TGenerator;
-
 // Тип функции для регистрации библиотеки в DLL
 typedef bool (__stdcall *TRegisterLibraryFunction)(TLibraryManager*);
 
@@ -113,10 +98,10 @@ __published:
     void __fastcall miAboutClick(TObject *Sender);
 
 private:
-    std::vector<TCircuitElement*> FElements;
+    std::vector<std::unique_ptr<TCircuitElement>> FElements; // Теперь используем умные указатели
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> FConnections;
     TCircuitElement* FSelectedElement;
-    std::vector<TCircuitElement*> FSelectedElements;
+    std::vector<TCircuitElement*> FSelectedElements; // Сырые указатели для выбранных элементов
     TCircuitElement* FDraggedElement;
     TConnectionPoint* FConnectionStart;
     bool FIsConnecting;
@@ -132,46 +117,61 @@ private:
     HINSTANCE FStandardLibraryHandle;
     std::unique_ptr<TLibraryManager> FLibraryManager;
 
+    // Встроенная базовая библиотека
+    std::unique_ptr<TComponentLibrary> FBasicLibrary;
+
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
     void RunSimulationStep();
     void ResetSimulation();
     void CreateCompleteLibrary();
-    TCircuitElement* CreateElementByType(const String& ElementDesc, int X, int Y);
-    TCircuitElement* CreateElementByTypeName(const String& TypeName, int X, int Y);
+
+    // Новые методы для работы с модульной архитектурой
+    std::unique_ptr<TCircuitElement> CreateElement(const String& LibraryName, const String& ElementName, int X, int Y);
+    std::unique_ptr<TCircuitElement> CreateElementFromCurrent(const String& ElementName, int X, int Y);
+
     void ShowElementProperties(TCircuitElement* Element);
     void UpdatePaintBoxSize();
     void ApplyZoom();
     void CenterCircuit();
     TRect GetCircuitBounds();
+
+    // Универсальная сериализация
     void SaveSchemeToFile(const String& FileName);
     void LoadSchemeFromFile(const String& FileName);
-    String ElementTypeToString(TElementType Type);
-    TElementType StringToElementType(const String& TypeStr);
+
+    // Методы для работы с выделением и группами
     std::vector<TCircuitElement*> GetSelectedElements();
     void CreateSubCircuitFromSelection();
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
+
+    // Методы для работы с библиотеками
     void UpdateLibrarySelector();
     void LoadCurrentLibrary();
     bool LoadStandardLibrary();
     void UnloadStandardLibrary();
 
+    // Создание встроенной базовой библиотеки
+    void CreateBasicLibrary();
+
 public:
     __fastcall TMainForm(TComponent* Owner);
 };
 
+// Подсхема - остается в EXE как базовый функционал
 class TSubCircuit : public TCircuitElement {
 private:
-    std::vector<TCircuitElement*> FInternalElements;
+    std::vector<std::unique_ptr<TCircuitElement>> FInternalElements;
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> FInternalConnections;
 
 public:
-    TSubCircuit(int AId, int X, int Y, const std::vector<TCircuitElement*>& Elements,
+    TSubCircuit(int AId, int X, int Y,
+                std::vector<std::unique_ptr<TCircuitElement>> Elements,
                 const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& Connections);
     void Calculate() override;
     void Draw(TCanvas* Canvas) override;
 
-    const std::vector<TCircuitElement*>& GetInternalElements() const { return FInternalElements; }
+    const std::vector<std::unique_ptr<TCircuitElement>>& GetInternalElements() const { return FInternalElements; }
     const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& GetInternalConnections() const { return FInternalConnections; }
 
 private:

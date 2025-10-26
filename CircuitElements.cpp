@@ -2,8 +2,11 @@
 #include <Vcl.Graphics.hpp>
 #include <math.h>
 
+#pragma package(smart_init)
+
+// TTernaryTrigger
 TTernaryTrigger::TTernaryTrigger(int AId, int X, int Y)
-    : TCircuitElement(AId, "Trig", TElementType::TERNARY_TRIGGER, X, Y),
+    : TCircuitElement(AId, "Trig", X, Y),
       FStoredState(TTernary::ZERO) {
 
     FBounds = TRect(X, Y, X + 120, Y + 80);
@@ -82,8 +85,9 @@ void TTernaryTrigger::Reset() {
     FStoredState = TTernary::ZERO;
 }
 
+// THalfAdder
 THalfAdder::THalfAdder(int AId, int X, int Y)
-    : TCircuitElement(AId, "HAdd", TElementType::HALF_ADDER, X, Y) {
+    : TCircuitElement(AId, "HAdd", X, Y) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
 
@@ -151,8 +155,9 @@ void THalfAdder::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TTernaryAdder
 TTernaryAdder::TTernaryAdder(int AId, int X, int Y)
-    : TCircuitElement(AId, "TAdd", TElementType::TERNARY_ADDER, X, Y) {
+    : TCircuitElement(AId, "TAdd", X, Y) {
 
     FBounds = TRect(X, Y, X + 100, Y + 80);
 
@@ -228,8 +233,9 @@ void TTernaryAdder::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TDecoder
 TDecoder::TDecoder(int AId, int X, int Y, int InputBits)
-    : TCircuitElement(AId, "Dec", TElementType::DECODER, X, Y),
+    : TCircuitElement(AId, "Dec", X, Y),
       FInputBits(InputBits), FOutputCount((int)pow(3, InputBits)) {
 
     FBounds = TRect(X, Y, X + 80, Y + 30 + FOutputCount * 15);
@@ -286,8 +292,9 @@ void TDecoder::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TCounter
 TCounter::TCounter(int AId, int X, int Y, int BitCount)
-    : TCircuitElement(AId, "Cnt", TElementType::COUNTER, X, Y),
+    : TCircuitElement(AId, "Cnt", X, Y),
       FCount(0), FMaxCount((int)pow(3, BitCount) - 1) {
 
     FBounds = TRect(X, Y, X + 40 + BitCount * 25, Y + 60);
@@ -350,8 +357,9 @@ void TCounter::Reset() {
     FCount = 0;
 }
 
+// TLogicAnd
 TLogicAnd::TLogicAnd(int AId, int X, int Y)
-    : TCircuitElement(AId, "AND", TElementType::LOGIC_AND, X, Y) {
+    : TCircuitElement(AId, "AND", X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
@@ -384,8 +392,9 @@ void TLogicAnd::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TLogicOr
 TLogicOr::TLogicOr(int AId, int X, int Y)
-    : TCircuitElement(AId, "OR", TElementType::LOGIC_OR, X, Y) {
+    : TCircuitElement(AId, "OR", X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
@@ -418,8 +427,9 @@ void TLogicOr::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TLogicInhibit
 TLogicInhibit::TLogicInhibit(int AId, int X, int Y)
-    : TCircuitElement(AId, "INH", TElementType::LOGIC_INHIBIT, X, Y) {
+    : TCircuitElement(AId, "INH", X, Y) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
@@ -454,8 +464,9 @@ void TLogicInhibit::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TGenerator
 TGenerator::TGenerator(int AId, int X, int Y)
-    : TCircuitElement(AId, "Gen", TElementType::GENERATOR, X, Y) {
+    : TCircuitElement(AId, "Gen", X, Y) {
 
     FBounds = TRect(X, Y, X + 50, Y + 30);
     FOutputs.push_back(TConnectionPoint(this, X+65, Y+15, TTernary::POS, false, TLineStyle::OUTPUT_LINE));
@@ -479,14 +490,16 @@ void TGenerator::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+// TDistributor
 TDistributor::TDistributor(int AId, int X, int Y, int Steps)
-    : TCircuitElement(AId, "Dist", TElementType::DISTRIBUTOR, X, Y),
+    : TCircuitElement(AId, "Dist", X, Y),
       FCurrentStep(0), FTotalSteps(Steps) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
 }
 
 void TDistributor::Calculate() {
+    // Реализация распределителя
 }
 
 void TDistributor::Draw(TCanvas* Canvas) {
@@ -499,14 +512,16 @@ void TDistributor::AdvanceStep() {
     FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
 }
 
+// TSwitch
 TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
-    : TCircuitElement(AId, "Switch", TElementType::SWITCH, X, Y),
+    : TCircuitElement(AId, "Switch", X, Y),
       FSelectedOutput(0) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
 }
 
 void TSwitch::Calculate() {
+    // Реализация переключателя
 }
 
 void TSwitch::Draw(TCanvas* Canvas) {

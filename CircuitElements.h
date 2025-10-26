@@ -3,10 +3,13 @@
 
 #include "CircuitElement.h"
 
+// Все специализированные элементы теперь определяются здесь
+// Они будут регистрироваться в библиотеках через фабрики
+
 class TTernaryTrigger : public TCircuitElement {
 private:
     TTernary FStoredState;
-    
+
 public:
     TTernaryTrigger(int AId, int X, int Y);
     void Calculate() override;
@@ -33,7 +36,7 @@ class TDecoder : public TCircuitElement {
 private:
     int FInputBits;
     int FOutputCount;
-    
+
 public:
     TDecoder(int AId, int X, int Y, int InputBits = 2);
     void Calculate() override;
@@ -44,7 +47,7 @@ class TCounter : public TCircuitElement {
 private:
     int FCount;
     int FMaxCount;
-    
+
 public:
     TCounter(int AId, int X, int Y, int BitCount = 2);
     void Calculate() override;
@@ -56,7 +59,7 @@ class TDistributor : public TCircuitElement {
 private:
     int FCurrentStep;
     int FTotalSteps;
-    
+
 public:
     TDistributor(int AId, int X, int Y, int Steps = 8);
     void Calculate() override;
@@ -67,7 +70,7 @@ public:
 class TSwitch : public TCircuitElement {
 private:
     int FSelectedOutput;
-    
+
 public:
     TSwitch(int AId, int X, int Y, int OutputCount = 3);
     void Calculate() override;
