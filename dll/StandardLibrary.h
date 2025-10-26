@@ -11,6 +11,7 @@
 
 extern "C" {
     DLL_EXPORT bool __stdcall RegisterStandardLibrary(TLibraryManager* libraryManager);
+    DLL_EXPORT void __stdcall UnregisterStandardLibrary(TLibraryManager* libraryManager);
 }
 
 #endif
