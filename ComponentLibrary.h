@@ -88,7 +88,7 @@ public:
     __property String Name = { read = FName };
     __property String Description = { read = FDescription };
     __property String Version = { read = FVersion };
-    __property int ElementCount = { read = GetElementCount }; // Исправленная строка
+    __property int ElementCount = { read = GetElementCount };
 };
 
 // Менеджер библиотек
