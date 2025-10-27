@@ -1,55 +1,82 @@
-﻿#define BUILD_DLL
-#include "StandardLibrary.h"
-#include "CircuitElement.h"
+﻿#include "StandardLibrary.h"
 #include "CircuitElements.h"
 #include <memory>
 
-// Глобальный указатель на библиотеку для возможности выгрузки
-static TComponentLibrary* GStandardLibrary = nullptr;
-
-extern "C" {
-
-DLL_EXPORT bool __stdcall RegisterStandardLibrary(TLibraryManager* libraryManager) {
-    if (!libraryManager) {
-        return false;
-    }
+// Внешняя функция для регистрации библиотеки в DLL
+extern "C" __declspec(dllexport) bool __stdcall RegisterStandardLibrary(TLibraryManager* LibraryManager) {
+    if (!LibraryManager) return false;
 
     try {
         auto standardLib = std::make_unique<TComponentLibrary>(
             "Standard", "Стандартная библиотека элементов Сетунь 1965", "1.0");
 
-        // Регистрируем все элементы через шаблонный метод
-        standardLib->RegisterElement<TTernaryTrigger>(
-            "Троичный триггер", "Троичный триггер - стр. 55", "Память", 120, 80);
-        
-        standardLib->RegisterElement<THalfAdder>(
-            "Полусумматор", "Полусумматор - стр. 58", "Арифметика", 80, 60);
-            
-        standardLib->RegisterElement<TTernaryAdder>(
-            "Троичный сумматор", "Троичный сумматор - стр. 58", "Арифметика", 100, 80);
-            
-        standardLib->RegisterElement<TDecoder>(
-            "Дешифратор кода", "Дешифратор кода - стр. 57", "Логика");
-            
-        standardLib->RegisterElement<TCounter>(
-            "Троичный счетчик", "Троичный счетчик - стр. 59", "Память");
-            
-        standardLib->RegisterElement<TLogicAnd>(
-            "Логический элемент И", "Логический элемент И - стр. 49", "Логика");
-            
-        standardLib->RegisterElement<TLogicOr>(
-            "Логический элемент ИЛИ", "Логический элемент ИЛИ - стр. 49", "Логика");
-            
-        standardLib->RegisterElement<TLogicInhibit>(
-            "Схема запрета", "Схема запрета - стр. 47", "Логика", 80, 60);
-            
-        standardLib->RegisterElement<TGenerator>(
-            "Генератор единиц", "Генератор единиц - стр. 50", "Источники", 50, 30);
+        // Регистрируем все элементы с правильными параметрами
+        standardLib->RegisterElement<TMagneticAmplifier>(
+            "Магнитный усилитель (простой)", 
+            "Простой магнитный усилитель", 
+            "Усилители", 80, 60);
 
-        // Сохраняем указатель для возможности выгрузки
-        GStandardLibrary = standardLib.get();
-        
-        libraryManager->RegisterLibrary(std::move(standardLib));
+        standardLib->RegisterElement<TMagneticAmplifier>(
+            "Магнитный усилитель (мощный)", 
+            "Мощный магнитный усилитель", 
+            "Усилители", 80, 60);
+
+        standardLib->RegisterElement<TTernaryElement>(
+            "Троичный элемент", 
+            "Базовый троичный элемент", 
+            "Логика", 80, 60);
+
+        standardLib->RegisterElement<TTernaryTrigger>(
+            "Троичный триггер", 
+            "Троичный триггер хранения состояния", 
+            "Память", 120, 80);
+
+        standardLib->RegisterElement<THalfAdder>(
+            "Полусумматор", 
+            "Троичный полусумматор", 
+            "Арифметика", 80, 60);
+
+        standardLib->RegisterElement<TTernaryAdder>(
+            "Троичный сумматор", 
+            "Троичный сумматор с переносом", 
+            "Арифметика", 100, 80);
+
+        standardLib->RegisterElement<TDecoder>(
+            "Дешифратор", 
+            "Дешифратор троичного кода", 
+            "Логика", 80, 100);
+
+        standardLib->RegisterElement<TCounter>(
+            "Счетчик", 
+            "Троичный счетчик", 
+            "Память", 140, 60);
+
+        standardLib->RegisterElement<TShiftRegister>(
+            "Сдвигающий регистр", 
+            "4-битный сдвигающий регистр", 
+            "Память", 100, 60);
+
+        standardLib->RegisterElement<TLogicAnd>(
+            "Логическое И", 
+            "Логический элемент И", 
+            "Логика", 60, 40);
+
+        standardLib->RegisterElement<TLogicOr>(
+            "Логическое ИЛИ", 
+            "Логический элемент ИЛИ", 
+            "Логика", 60, 40);
+
+        standardLib->RegisterElement<TLogicInhibit>(
+            "Запрет", 
+            "Схема запрета", 
+            "Логика", 80, 60);
+
+        standardLib->RegisterElement<TGenerator>(
+            "Генератор", 
+            "Генератор единиц", 
+            "Источники", 50, 30);
+
+        LibraryManager->RegisterLibrary(std::move(standardLib));
         return true;
     }
     catch (...) {
@@ -57,11 +84,26 @@ DLL_EXPORT bool __stdcall RegisterStandardLibrary(TLibraryManager* libraryManage
     }
 }
 
-DLL_EXPORT void __stdcall UnregisterStandardLibrary(TLibraryManager* libraryManager) {
-    if (libraryManager && GStandardLibrary) {
-        libraryManager->UnregisterLibrary(GStandardLibrary->Name);
-        GStandardLibrary = nullptr;
+// Функция для отмены регистрации (опционально)
+extern "C" __declspec(dllexport) void __stdcall UnregisterStandardLibrary(TLibraryManager* LibraryManager) {
+    if (LibraryManager) {
+        try {
+            LibraryManager->UnregisterLibrary("Standard");
+        }
+        catch (...) {
+            // Игнорируем ошибки при выгрузке
+        }
     }
 }
 
-} // extern "C"
+// Точка входа DLL (опционально)
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
+        case DLL_PROCESS_ATTACH:
+        case DLL_THREAD_ATTACH:
+        case DLL_THREAD_DETACH:
+        case DLL_PROCESS_DETACH:
+            break;
+    }
+    return TRUE;
+}
