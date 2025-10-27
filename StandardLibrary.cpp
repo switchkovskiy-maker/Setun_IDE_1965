@@ -1,4 +1,4 @@
-﻿#include "StandardLibrary.h"
+#include "StandardLibrary.h"
 
 void RegisterStandardLibrary() {
     auto standardLib = std::make_unique<TComponentLibrary>(

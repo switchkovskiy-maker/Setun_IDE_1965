@@ -144,7 +144,11 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
     FScrollOffsetX(0), FScrollOffsetY(0), FStandardLibraryHandle(0) {
 
-    // Инициализация скроллбаров
+    // Включаем двойную буферизацию
+    CircuitImage->ControlStyle = CircuitImage->ControlStyle << csOpaque;
+    DoubleBuffered = true;
+
+    // Инициализируем скроллбары
     Workspace->HorzScrollBar->Tracking = true;
     Workspace->VertScrollBar->Tracking = true;
 
@@ -237,6 +241,7 @@ TPoint TMainForm::GetBestPlacementPosition(int width, int height) {
 
     return TPoint(x, y);
 }
+
 // Метод для удаления выделенных элементов
 void TMainForm::DeleteSelectedElements() {
     if (FSelectedElements.empty()) return;
@@ -325,19 +330,19 @@ void TMainForm::CreateBasicLibrary() {
     // Создаем встроенную базовую библиотеку
     FBasicLibrary = std::make_unique<TComponentLibrary>("Basic", "Базовая библиотека элементов", "1.0");
 
-    // Регистрируем базовые элементы с правильными именами
+    // Регистрируем базовые элементы с простыми именами
     FBasicLibrary->RegisterElement<TMagneticAmplifier>("Магнитный усилитель", "Простой магнитный усилитель", "Усилители");
     FBasicLibrary->RegisterElement<TTernaryElement>("Троичный элемент", "Базовый троичный элемент", "Логика");
     FBasicLibrary->RegisterElement<TShiftRegister>("Сдвигающий регистр", "4-битный сдвигающий регистр", "Память");
     FBasicLibrary->RegisterElement<TTernaryTrigger>("Троичный триггер", "Троичный триггер", "Память");
     FBasicLibrary->RegisterElement<THalfAdder>("Полусумматор", "Троичный полусумматор", "Арифметика");
     FBasicLibrary->RegisterElement<TTernaryAdder>("Троичный сумматор", "Троичный сумматор", "Арифметика");
-    FBasicLibrary->RegisterElement<TDecoder>("Дешифратор кода", "Дешифратор троичного кода", "Логика");
-    FBasicLibrary->RegisterElement<TCounter>("Троичный счетчик", "Троичный счетчик", "Память");
-    FBasicLibrary->RegisterElement<TLogicAnd>("Логический элемент И", "Логический элемент И", "Логика");
-    FBasicLibrary->RegisterElement<TLogicOr>("Логический элемент ИЛИ", "Логический элемент ИЛИ", "Логика");
-    FBasicLibrary->RegisterElement<TLogicInhibit>("Схема запрета", "Схема запрета", "Логика");
-    FBasicLibrary->RegisterElement<TGenerator>("Генератор единиц", "Генератор единиц", "Источники");
+    FBasicLibrary->RegisterElement<TDecoder>("Дешифратор", "Дешифратор троичного кода", "Логика");
+    FBasicLibrary->RegisterElement<TCounter>("Счетчик", "Троичный счетчик", "Память");
+    FBasicLibrary->RegisterElement<TLogicAnd>("Логическое И", "Логический элемент И", "Логика");
+    FBasicLibrary->RegisterElement<TLogicOr>("Логическое ИЛИ", "Логический элемент ИЛИ", "Логика");
+    FBasicLibrary->RegisterElement<TLogicInhibit>("Запрет", "Схема запрета", "Логика");
+    FBasicLibrary->RegisterElement<TGenerator>("Генератор", "Генератор единиц", "Источники");
 
     // Регистрируем библиотеку в менеджере
     FLibraryManager->RegisterLibrary(std::move(FBasicLibrary));
@@ -428,35 +433,59 @@ void TMainForm::UnloadStandardLibrary() {
 }
 
 // Новые методы для создания элементов через библиотеки
+// Обновленный метод CreateElement
 std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryName, const String& ElementName, int X, int Y) {
     try {
+        if (!FLibraryManager) {
+            throw Exception("Менеджер библиотек не инициализирован");
+        }
+
         auto element = FLibraryManager->CreateElement(LibraryName, ElementName, FNextElementId, X, Y);
         if (element) {
             element->CalculateRelativePositions();
             FNextElementId++;
+        } else {
+            throw Exception("Библиотека вернула nullptr для элемента '" + ElementName + "' из библиотеки '" + LibraryName + "'");
         }
         return element;
     }
     catch (Exception &e) {
-        ShowMessage("Ошибка создания элемента '" + ElementName + "' из библиотеки '" + LibraryName + "': " + e.Message);
+        String errorMsg = "Ошибка создания элемента '" + ElementName + "' из библиотеки '" + LibraryName + "': " + e.Message;
+        ShowMessage(errorMsg);
+        StatusBar->Panels->Items[0]->Text = errorMsg;
         return nullptr;
     }
 }
 
+
+// Обновленный метод CreateElementFromCurrent с улучшенной обработкой ошибок
 std::unique_ptr<TCircuitElement> TMainForm::CreateElementFromCurrent(const String& ElementName, int X, int Y) {
     try {
+        if (!FLibraryManager) {
+            throw Exception("Менеджер библиотек не инициализирован");
+        }
+
+        if (!FLibraryManager->GetCurrentLibrary()) {
+            throw Exception("Текущая библиотека не установлена");
+        }
+
         auto element = FLibraryManager->CreateElementFromCurrent(ElementName, FNextElementId, X, Y);
         if (element) {
             element->CalculateRelativePositions();
             FNextElementId++;
+        } else {
+            throw Exception("Библиотека вернула nullptr для элемента: " + ElementName);
         }
         return element;
     }
     catch (Exception &e) {
-        ShowMessage("Ошибка создания элемента '" + ElementName + "': " + e.Message);
+        String errorMsg = "Ошибка создания элемента '" + ElementName + "': " + e.Message;
+        ShowMessage(errorMsg);
+        StatusBar->Panels->Items[0]->Text = errorMsg;
         return nullptr;
     }
 }
+
 
 void TMainForm::UpdateLibrarySelector() {
     cmbLibrarySelector->Items->Clear();
@@ -504,6 +533,7 @@ void __fastcall TMainForm::cmbLibrarySelectorChange(TObject *Sender) {
 void TMainForm::CreateCompleteLibrary() {
     UpdateLibrarySelector();
 }
+
 void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
     if (ElementLibrary->ItemIndex < 0) return;
 
@@ -588,40 +618,51 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
     int connectionCount = iniFile->ReadInteger("Scheme", "ConnectionCount", 0);
     FNextElementId = iniFile->ReadInteger("Scheme", "NextElementId", 1);
 
-// В методе LoadSchemeFromFile обновите карту nameMap:
-std::map<String, String> nameMap;
-nameMap["TAdd"] = "Троичный сумматор";
-nameMap["AND"] = "Логический элемент И";
-nameMap["MA"] = "Магнитный усилитель";
-nameMap["TE"] = "Троичный элемент";
-nameMap["Trig"] = "Троичный триггер";
-nameMap["HAdd"] = "Полусумматор";
-nameMap["Dec"] = "Дешифратор кода";
-nameMap["Cnt"] = "Троичный счетчик";
-nameMap["SR"] = "Сдвигающий регистр";
-nameMap["OR"] = "Логический элемент ИЛИ";
-nameMap["INH"] = "Схема запрета";
-nameMap["Gen"] = "Генератор единиц";
-// Добавьте новые элементы если нужно
+    // Находим границы загружаемой схемы для центрирования
+    int minX = MAXINT, minY = MAXINT, maxX = 0, maxY = 0;
+    std::vector<TRect> loadedBounds;
 
-    // Упрощенная загрузка - создаем элементы по имени
+    // Сначала собираем информацию о всех элементах
     for (int i = 0; i < elementCount; i++) {
         String section = "Element_" + IntToStr(i);
 
-        String name = iniFile->ReadString(section, "Name", "");
-
-        // ПРЕОБРАЗОВАНИЕ ИМЕНИ ДЛЯ СОВМЕСТИМОСТИ
-        if (nameMap.find(name) != nameMap.end()) {
-            name = nameMap[name];
-        }
-
-        int id = iniFile->ReadInteger(section, "Id", 0);
         int x = iniFile->ReadInteger(section, "X", 0);
         int y = iniFile->ReadInteger(section, "Y", 0);
         int width = iniFile->ReadInteger(section, "Width", 80);
         int height = iniFile->ReadInteger(section, "Height", 60);
 
-        // Пытаемся создать элемент по имени из текущей библиотеки
+        TRect bounds(x, y, x + width, y + height);
+        loadedBounds.push_back(bounds);
+
+        minX = std::min(minX, x);
+        minY = std::min(minY, y);
+        maxX = std::max(maxX, x + width);
+        maxY = std::max(maxY, y + height);
+    }
+
+    // Вычисляем смещение для центрирования
+    int schemeWidth = maxX - minX;
+    int schemeHeight = maxY - minY;
+
+    // Центр видимой области
+    TPoint visibleCenter = GetVisibleAreaCenter();
+
+    // Смещение для центрирования схемы
+    int offsetX = visibleCenter.X - (minX + schemeWidth / 2);
+    int offsetY = visibleCenter.Y - (minY + schemeHeight / 2);
+
+    // Загружаем элементы со смещением для центрирования
+    for (int i = 0; i < elementCount; i++) {
+        String section = "Element_" + IntToStr(i);
+
+        String name = iniFile->ReadString(section, "Name", "");
+        int id = iniFile->ReadInteger(section, "Id", 0);
+        int x = iniFile->ReadInteger(section, "X", 0) + offsetX;
+        int y = iniFile->ReadInteger(section, "Y", 0) + offsetY;
+        int width = iniFile->ReadInteger(section, "Width", 80);
+        int height = iniFile->ReadInteger(section, "Height", 60);
+
+        // Создаем элемент по имени из файла
         auto element = CreateElementFromCurrent(name, x, y);
         if (element) {
             element->SetId(id);
@@ -632,15 +673,15 @@ nameMap["Gen"] = "Генератор единиц";
         }
     }
 
-    // Восстанавливаем соединения (упрощенно)
-    // В реальной реализации нужна более сложная логика
-
-    // Центрируем схему после загрузки
-    CenterCircuit();
-
+    // Обновляем размеры и центрируем
     UpdatePaintBoxSize();
+    CenterCircuit();
     CircuitImage->Repaint();
+
+    StatusBar->Panels->Items[0]->Text = "Схема загружена: " + FileName +
+                                       " (элементов: " + IntToStr(elementCount) + ")";
 }
+
 
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
     DeleteSelectedElements();
@@ -672,28 +713,49 @@ void __fastcall TMainForm::CircuitImagePaint(TObject *Sender) {
 }
 
 void TMainForm::DrawCircuit() {
-    std::unique_ptr<TBitmap> buffer(new TBitmap);
-    buffer->Width = CircuitImage->Width;
-    buffer->Height = CircuitImage->Height;
+    OptimizedDrawCircuit(CircuitImage->Canvas);
+}
+
+void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
+    // Используем статический буфер для уменьшения создания/удаления объектов
+    static std::unique_ptr<TBitmap> buffer;
+    static int lastWidth = 0, lastHeight = 0;
+
+    if (!buffer || lastWidth != CircuitImage->Width || lastHeight != CircuitImage->Height) {
+        buffer = std::make_unique<TBitmap>();
+        buffer->Width = CircuitImage->Width;
+        buffer->Height = CircuitImage->Height;
+        lastWidth = CircuitImage->Width;
+        lastHeight = CircuitImage->Height;
+    }
 
     TCanvas* canvas = buffer->Canvas;
 
+    // Очистка фона
     canvas->Brush->Color = clWhite;
     canvas->FillRect(CircuitImage->ClientRect);
 
-    // Сетка
-    canvas->Pen->Color = clSilver;
-    canvas->Pen->Style = psDot;
-    int gridSize = static_cast<int>(20 * FZoomFactor);
-    for (int x = 0; x < CircuitImage->Width; x += gridSize) {
-        canvas->MoveTo(x, 0);
-        canvas->LineTo(x, CircuitImage->Height);
+    // Статическая переменная для отслеживания изменения масштаба
+    static double lastZoomFactor = 0;
+
+    // Сетка рисуется только при изменении масштаба
+    if (lastZoomFactor != FZoomFactor) {
+        canvas->Pen->Color = clSilver;
+        canvas->Pen->Style = psDot;
+        int gridSize = static_cast<int>(20 * FZoomFactor);
+        if (gridSize > 2) { // Не рисуем слишком мелкую сетку
+            for (int x = 0; x < CircuitImage->Width; x += gridSize) {
+                canvas->MoveTo(x, 0);
+                canvas->LineTo(x, CircuitImage->Height);
+            }
+            for (int y = 0; y < CircuitImage->Height; y += gridSize) {
+                canvas->MoveTo(0, y);
+                canvas->LineTo(CircuitImage->Width, y);
+            }
+        }
+        canvas->Pen->Style = psSolid;
+        lastZoomFactor = FZoomFactor;
     }
-    for (int y = 0; y < CircuitImage->Height; y += gridSize) {
-        canvas->MoveTo(0, y);
-        canvas->LineTo(CircuitImage->Width, y);
-    }
-    canvas->Pen->Style = psSolid;
 
     // Соединения
     canvas->Pen->Width = static_cast<int>(2 * FZoomFactor);
@@ -713,10 +775,11 @@ void TMainForm::DrawCircuit() {
         canvas->MoveTo(screenStart.X, screenStart.Y);
         canvas->LineTo(screenEnd.X, screenEnd.Y);
 
+        // Стрелка только для достаточно длинных линий
         int dx = screenEnd.X - screenStart.X;
         int dy = screenEnd.Y - screenStart.Y;
         double length = sqrt(dx*dx + dy*dy);
-        if (length > 0) {
+        if (length > 15) { // Минимальная длина для отображения стрелки
             double unitX = dx / length;
             double unitY = dy / length;
 
@@ -786,7 +849,8 @@ void TMainForm::DrawCircuit() {
         canvas->Pen->Style = psSolid;
     }
 
-    CircuitImage->Canvas->Draw(0, 0, buffer.get());
+    // Единоразовая отрисовка буфера на экран
+    Canvas->Draw(0, 0, buffer.get());
 }
 
 TColor TMainForm::TernaryToColor(TTernary Value) {
@@ -797,6 +861,7 @@ TColor TMainForm::TernaryToColor(TTernary Value) {
         default: return clBlack;
     }
 }
+
 void __fastcall TMainForm::WorkspaceMouseWheel(TObject *Sender, TShiftState Shift,
     int WheelDelta, TPoint &MousePos, bool &Handled) {
 
@@ -829,107 +894,114 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
     ));
 
     if (Button == mbLeft) {
-        if (btnConnectionMode->Down) {
-            for (auto& element : FElements) {
-                // Используем логические координаты для поиска точек соединения
-                TConnectionPoint* conn = element->GetConnectionAt(logicalPos.X, logicalPos.Y);
-                if (conn) {
-                    if (!FIsConnecting) {
-                        if (!conn->IsInput) {
-                            FConnectionStart = conn;
-                            FIsConnecting = true;
-                            StatusBar->Panels->Items[0]->Text = "Выбрана выходная точка. Выберите входную точку.";
-                        } else {
-                            StatusBar->Panels->Items[0]->Text = "Ошибка: первая точка должна быть выходом (синяя)";
-                        }
-                        CircuitImage->Repaint();
+        // ПЕРВОЕ: проверяем клик на точку соединения ВНЕ зависимости от текущего режима
+        for (auto& element : FElements) {
+            TConnectionPoint* conn = element->GetConnectionAt(logicalPos.X, logicalPos.Y);
+            if (conn) {
+                if (!FIsConnecting) {
+                    // Начало нового соединения
+                    if (!conn->IsInput) {
+                        // Клик на выходной точке - начинаем соединение
+                        FConnectionStart = conn;
+                        FIsConnecting = true;
+                        btnConnectionMode->Down = true; // Автоматически включаем режим соединения
+                        StatusBar->Panels->Items[0]->Text = "Режим соединения. Выберите входную точку.";
                     } else {
-                        if (conn->IsInput) {
-                            bool connectionExists = false;
-                            for (auto& existingConn : FConnections) {
-                                if (existingConn.first == FConnectionStart && existingConn.second == conn) {
-                                    connectionExists = true;
-                                    break;
-                                }
-                            }
-
-                            if (!connectionExists) {
-                                FConnections.push_back(std::make_pair(FConnectionStart, conn));
-                                StatusBar->Panels->Items[0]->Text = "Соединение создано.";
-                            } else {
-                                StatusBar->Panels->Items[0]->Text = "Соединение уже существует.";
-                            }
-                        } else {
-                            StatusBar->Panels->Items[0]->Text = "Ошибка: вторая точка должна быть входом (зеленая)";
-                        }
-                        FIsConnecting = false;
-                        FConnectionStart = nullptr;
-                        CircuitImage->Repaint();
+                        StatusBar->Panels->Items[0]->Text = "Ошибка: первая точка должна быть выходом (синяя)";
                     }
+                    CircuitImage->Repaint();
                     return;
-                }
-            }
+                } else {
+                    // Завершение существующего соединения
+                    if (conn->IsInput && FConnectionStart && FConnectionStart->Owner != conn->Owner) {
+                        bool connectionExists = false;
+                        for (auto& existingConn : FConnections) {
+                            if (existingConn.first == FConnectionStart && existingConn.second == conn) {
+                                connectionExists = true;
+                                break;
+                            }
+                        }
 
-            if (FIsConnecting) {
-                FIsConnecting = false;
-                FConnectionStart = nullptr;
-                StatusBar->Panels->Items[0]->Text = "Соединение отменено.";
-                CircuitImage->Repaint();
+                        if (!connectionExists) {
+                            FConnections.push_back(std::make_pair(FConnectionStart, conn));
+                            StatusBar->Panels->Items[0]->Text = "Соединение создано.";
+                        } else {
+                            StatusBar->Panels->Items[0]->Text = "Соединение уже существует.";
+                        }
+                    } else {
+                        StatusBar->Panels->Items[0]->Text = "Ошибка: вторая точка должна быть входом (зеленая) и принадлежать другому элементу";
+                    }
+                    FIsConnecting = false;
+                    FConnectionStart = nullptr;
+                    btnConnectionMode->Down = false; // Автоматически выходим из режима соединения
+                    CircuitImage->Repaint();
+                }
+                return;
             }
         }
-        else {
-            FSelectedElement = nullptr;
-            FDraggedElement = nullptr;
 
+        // Если кликнули на пустом месте в режиме соединения - выходим из режима
+        if (FIsConnecting) {
+            FIsConnecting = false;
+            FConnectionStart = nullptr;
+            btnConnectionMode->Down = false;
+            StatusBar->Panels->Items[0]->Text = "Режим соединения отменен.";
+            CircuitImage->Repaint();
+            return;
+        }
+
+        // Стандартная обработка выделения и перемещения элементов
+        FSelectedElement = nullptr;
+        FDraggedElement = nullptr;
+
+        if (!Shift.Contains(ssCtrl)) {
+            FSelectedElements.clear();
+        }
+
+        bool elementFound = false;
+
+        for (auto& element : FElements) {
+            TRect bounds = element->Bounds;
+            TRect expandedBounds = TRect(
+                bounds.Left - 5, bounds.Top - 5,
+                bounds.Right + 5, bounds.Bottom + 5
+            );
+
+            if (logicalPos.X >= expandedBounds.Left && logicalPos.X <= expandedBounds.Right &&
+                logicalPos.Y >= expandedBounds.Top && logicalPos.Y <= expandedBounds.Bottom) {
+
+                FSelectedElement = element.get();
+                elementFound = true;
+
+                auto it = std::find(FSelectedElements.begin(), FSelectedElements.end(), element.get());
+                if (it == FSelectedElements.end()) {
+                    FSelectedElements.push_back(element.get());
+                }
+
+                FDraggedElement = element.get();
+                FIsDragging = true;
+
+                FDragOffsetX = logicalPos.X - bounds.Left;
+                FDragOffsetY = logicalPos.Y - bounds.Top;
+
+                StatusBar->Panels->Items[0]->Text = "Выбран элемент: " + element->Name;
+                break;
+            }
+        }
+
+        if (!elementFound) {
+            FIsSelecting = true;
+            // FSelectionRect задается в экранных координатах
+            FSelectionRect = TRect(X, Y, X, Y);
             if (!Shift.Contains(ssCtrl)) {
                 FSelectedElements.clear();
             }
-
-            bool elementFound = false;
-
-            for (auto& element : FElements) {
-                TRect bounds = element->Bounds;
-                TRect expandedBounds = TRect(
-                    bounds.Left - 5, bounds.Top - 5,
-                    bounds.Right + 5, bounds.Bottom + 5
-                );
-
-                if (logicalPos.X >= expandedBounds.Left && logicalPos.X <= expandedBounds.Right &&
-                    logicalPos.Y >= expandedBounds.Top && logicalPos.Y <= expandedBounds.Bottom) {
-
-                    FSelectedElement = element.get();
-                    elementFound = true;
-
-                    auto it = std::find(FSelectedElements.begin(), FSelectedElements.end(), element.get());
-                    if (it == FSelectedElements.end()) {
-                        FSelectedElements.push_back(element.get());
-                    }
-
-                    FDraggedElement = element.get();
-                    FIsDragging = true;
-
-                    FDragOffsetX = logicalPos.X - bounds.Left;
-                    FDragOffsetY = logicalPos.Y - bounds.Top;
-
-                    StatusBar->Panels->Items[0]->Text = "Выбран элемент: " + element->Name;
-                    break;
-                }
-            }
-
-            if (!elementFound) {
-                FIsSelecting = true;
-                // FSelectionRect задается в экранных координатах
-                FSelectionRect = TRect(X, Y, X, Y);
-                if (!Shift.Contains(ssCtrl)) {
-                    FSelectedElements.clear();
-                }
-                StatusBar->Panels->Items[0]->Text = "Режим выделения: рисуйте прямоугольник";
-            } else {
-                StatusBar->Panels->Items[0]->Text = "Выбрано элементов: " + IntToStr(static_cast<int>(FSelectedElements.size()));
-            }
-
-            CircuitImage->Repaint();
+            StatusBar->Panels->Items[0]->Text = "Режим выделения: рисуйте прямоугольник";
+        } else {
+            StatusBar->Panels->Items[0]->Text = "Выбрано элементов: " + IntToStr(static_cast<int>(FSelectedElements.size()));
         }
+
+        CircuitImage->Repaint();
     } else if (Button == mbRight) {
         FSelectedElement = nullptr;
         for (auto& element : FElements) {
@@ -952,19 +1024,27 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
         Y + Workspace->VertScrollBar->Position
     ));
 
+    // Оптимизация: обновляем только при значительном перемещении
+    static int lastX = -1, lastY = -1;
+
     if (FIsDragging && FDraggedElement) {
-        int newLeft = logicalPos.X - FDragOffsetX;
-        int newTop = logicalPos.Y - FDragOffsetY;
+        if (abs(logicalPos.X - lastX) > 1 || abs(logicalPos.Y - lastY) > 1) {
+            int newLeft = logicalPos.X - FDragOffsetX;
+            int newTop = logicalPos.Y - FDragOffsetY;
 
-        TRect newBounds = TRect(
-            newLeft,
-            newTop,
-            newLeft + FDraggedElement->Bounds.Width(),
-            newTop + FDraggedElement->Bounds.Height()
-        );
+            TRect newBounds = TRect(
+                newLeft,
+                newTop,
+                newLeft + FDraggedElement->Bounds.Width(),
+                newTop + FDraggedElement->Bounds.Height()
+            );
 
-        FDraggedElement->SetBounds(newBounds);
-        CircuitImage->Repaint();
+            FDraggedElement->SetBounds(newBounds);
+            CircuitImage->Repaint();
+
+            lastX = logicalPos.X;
+            lastY = logicalPos.Y;
+        }
     }
     else if (FIsSelecting) {
         FSelectionRect.Right = X;
@@ -972,7 +1052,8 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
         CircuitImage->Repaint();
     }
 
-    if (btnConnectionMode->Down) {
+    // Обновление курсора
+    if (btnConnectionMode->Down || FIsConnecting) {
         bool overConnection = false;
         for (auto& element : FElements) {
             if (element->GetConnectionAt(logicalPos.X, logicalPos.Y)) {
@@ -1141,6 +1222,7 @@ void __fastcall TMainForm::miRotateElementClick(TObject *Sender) {
         StatusBar->Panels->Items[0]->Text = "Элемент повернут.";
     }
 }
+
 void __fastcall TMainForm::btnZoomInClick(TObject *Sender) {
     FZoomFactor *= 1.2;
     if (FZoomFactor > 5.0) FZoomFactor = 5.0;
@@ -1270,6 +1352,7 @@ std::vector<TCircuitElement*> TMainForm::GetSelectedElements() {
     return FSelectedElements;
 }
 
+
 void TMainForm::CreateSubCircuitFromSelection() {
     auto selectedElements = GetSelectedElements();
 
@@ -1289,6 +1372,7 @@ void TMainForm::CreateSubCircuitFromSelection() {
     int centerX = (totalBounds.Left + totalBounds.Right) / 2;
     int centerY = (totalBounds.Top + totalBounds.Bottom) / 2;
 
+    // Собираем внутренние соединения
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> internalConnections;
     for (auto& connection : FConnections) {
         bool fromSelected = false;
@@ -1304,7 +1388,7 @@ void TMainForm::CreateSubCircuitFromSelection() {
         }
     }
 
-    // Собираем элементы для подсхемы с использованием перемещения
+    // Собираем элементы для подсхемы
     std::vector<std::unique_ptr<TCircuitElement>> subCircuitElements;
     for (auto selectedElement : selectedElements) {
         auto it = std::find_if(FElements.begin(), FElements.end(),
@@ -1313,12 +1397,11 @@ void TMainForm::CreateSubCircuitFromSelection() {
             });
 
         if (it != FElements.end()) {
-            // Используем перемещение вместо копирования
             subCircuitElements.push_back(std::move(*it));
         }
     }
 
-    // Удаляем элементы из основного списка (теперь они nullptr после перемещения)
+    // Удаляем элементы из основного списка
     FElements.erase(std::remove_if(FElements.begin(), FElements.end(),
         [](const std::unique_ptr<TCircuitElement>& elem) {
             return elem == nullptr;
@@ -1332,100 +1415,97 @@ void TMainForm::CreateSubCircuitFromSelection() {
         }
     }
 
-	// Создаем подсхему с использованием перемещения
-	auto subCircuit = std::make_unique<TSubCircuit>(FNextElementId++, centerX, centerY,
-												   std::move(subCircuitElements), // перемещаем вектор
-												   internalConnections);
+    // Создаем подсхему
+    auto subCircuit = std::make_unique<TSubCircuit>(FNextElementId++, centerX, centerY,
+                                                   std::move(subCircuitElements),
+                                                   internalConnections);
 
-	FSelectedElement = subCircuit.get();
-	FSelectedElements.clear();
-	FSelectedElements.push_back(subCircuit.get());
+    FSelectedElement = subCircuit.get();
+    FSelectedElements.clear();
+    FSelectedElements.push_back(subCircuit.get());
 
-	FElements.push_back(std::move(subCircuit));
+    FElements.push_back(std::move(subCircuit));
 
-	UpdatePaintBoxSize();
-	CircuitImage->Repaint();
-	StatusBar->Panels->Items[0]->Text = "Создана подсхема из " + IntToStr(static_cast<int>(selectedElements.size())) + " элементов";
+    UpdatePaintBoxSize();
+    CircuitImage->Repaint();
+    StatusBar->Panels->Items[0]->Text = "Создана подсхема из " + IntToStr(static_cast<int>(selectedElements.size())) + " элементов";
+}
+
+TConnectionPoint* TMainForm::FindRestoredConnectionPoint(const TConnectionPoint* originalPoint) {
+    if (!originalPoint || !originalPoint->Owner) return nullptr;
+
+    // Ищем восстановленный элемент по оригинальным координатам и имени
+    for (auto& element : FElements) {
+        if (element->Bounds.Left == originalPoint->Owner->Bounds.Left &&
+            element->Bounds.Top == originalPoint->Owner->Bounds.Top &&
+            element->Name == originalPoint->Owner->Name) {
+
+            // Находим соответствующую точку соединения по относительным координатам
+            if (originalPoint->IsInput) {
+                for (auto& input : element->Inputs) {
+                    // Сравниваем относительные позиции для точного соответствия
+                    if (abs(input.RelX - originalPoint->RelX) < 0.01 &&
+                        abs(input.RelY - originalPoint->RelY) < 0.01) {
+                        return &input;
+                    }
+                }
+            } else {
+                for (auto& output : element->Outputs) {
+                    if (abs(output.RelX - originalPoint->RelX) < 0.01 &&
+                        abs(output.RelY - originalPoint->RelY) < 0.01) {
+                        return &output;
+                    }
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
 void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
     TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(SubCircuit);
     if (!subCircuit) return;
 
-    // Карта преобразования внутренних имен в имена библиотеки
-    std::map<String, String> nameMap;
-    nameMap["MA"] = "Магнитный усилитель";
-    nameMap["MA+"] = "Магнитный усилитель";
-    nameMap["TE"] = "Троичный элемент";
-    nameMap["SR"] = "Сдвигающий регистр";
-    nameMap["Trig"] = "Троичный триггер";
-    nameMap["HAdd"] = "Полусумматор";
-    nameMap["TAdd"] = "Троичный сумматор";
-    nameMap["Dec"] = "Дешифратор кода";
-    nameMap["Cnt"] = "Троичный счетчик";
-    nameMap["AND"] = "Логический элемент И";
-    nameMap["OR"] = "Логический элемент ИЛИ";
-    nameMap["INH"] = "Схема запрета";
-    nameMap["Gen"] = "Генератор единиц";
-    nameMap["Dist"] = "Распределитель";
-    nameMap["Switch"] = "Переключатель";
-
     const auto& internalElements = subCircuit->GetInternalElements();
     const auto& internalConnections = subCircuit->GetInternalConnections();
 
     // Восстанавливаем элементы в основной схеме
     for (const auto& element : internalElements) {
-        String elementName = element->Name;
+        // Восстанавливаем оригинальные позиции элементов
+        TRect originalBounds = element->Bounds;
 
-        // Преобразуем имя для совместимости с библиотекой
-        if (nameMap.find(elementName) != nameMap.end()) {
-            elementName = nameMap[elementName];
-        }
-
-        // Пытаемся создать элемент из текущей библиотеки
-        auto newElement = CreateElementFromCurrent(elementName, element->Bounds.Left, element->Bounds.Top);
+        // Создаем новый элемент того же типа
+        auto newElement = CreateElementFromCurrent(element->Name, originalBounds.Left, originalBounds.Top);
         if (newElement) {
-            newElement->SetBounds(element->Bounds);
+            newElement->SetBounds(originalBounds);
+            newElement->CalculateRelativePositions(); // Важно: пересчитываем позиции точек
 
-            // Копируем состояния
+            // Восстанавливаем состояния
             for (size_t i = 0; i < std::min(element->Inputs.size(), newElement->Inputs.size()); ++i) {
                 newElement->Inputs[i].Value = element->Inputs[i].Value;
+                // Копируем относительные позиции для точного восстановления
+                newElement->Inputs[i].RelX = element->Inputs[i].RelX;
+                newElement->Inputs[i].RelY = element->Inputs[i].RelY;
             }
             for (size_t i = 0; i < std::min(element->Outputs.size(), newElement->Outputs.size()); ++i) {
                 newElement->Outputs[i].Value = element->Outputs[i].Value;
+                newElement->Outputs[i].RelX = element->Outputs[i].RelX;
+                newElement->Outputs[i].RelY = element->Outputs[i].RelY;
             }
 
             FElements.push_back(std::move(newElement));
-        } else {
-            // Если не удалось создать из библиотеки, создаем конкретный элемент вместо абстрактного
-            ShowMessage("Не удалось восстановить элемент: " + element->Name +
-                       ". Создан троичный элемент по умолчанию.");
-
-            // Создаем конкретный элемент вместо абстрактного TCircuitElement
-            auto fallbackElement = std::make_unique<TTernaryElement>(
-                FNextElementId++, element->Bounds.Left, element->Bounds.Top);
-            fallbackElement->SetName(element->Name);
-            fallbackElement->SetBounds(element->Bounds);
-
-            // Копируем состояния входов/выходов если размеры совпадают
-            if (element->Inputs.size() == fallbackElement->Inputs.size()) {
-                for (size_t i = 0; i < element->Inputs.size(); ++i) {
-                    fallbackElement->Inputs[i].Value = element->Inputs[i].Value;
-                }
-            }
-            if (element->Outputs.size() == fallbackElement->Outputs.size()) {
-                for (size_t i = 0; i < element->Outputs.size(); ++i) {
-                    fallbackElement->Outputs[i].Value = element->Outputs[i].Value;
-                }
-            }
-
-            FElements.push_back(std::move(fallbackElement));
         }
     }
 
-    // Восстанавливаем соединения
+    // Восстанавливаем ВСЕ соединения
     for (const auto& conn : internalConnections) {
-        FConnections.push_back(conn);
+        // Находим соответствующие точки в восстановленных элементах
+        TConnectionPoint* fromPoint = FindRestoredConnectionPoint(conn.first);
+        TConnectionPoint* toPoint = FindRestoredConnectionPoint(conn.second);
+
+        if (fromPoint && toPoint) {
+            FConnections.push_back(std::make_pair(fromPoint, toPoint));
+        }
     }
 
     // Удаляем подсхему
@@ -1445,7 +1525,6 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
     CircuitImage->Repaint();
     StatusBar->Panels->Items[0]->Text = "Подсхема разгруппирована";
 }
-
 
 void __fastcall TMainForm::btnGroupElementsClick(TObject *Sender) {
     CreateSubCircuitFromSelection();
@@ -1477,4 +1556,3 @@ void __fastcall TMainForm::miAboutClick(TObject *Sender) {
 
     Application->MessageBox(aboutText.w_str(), L"О программе", MB_OK | MB_ICONINFORMATION);
 }
-

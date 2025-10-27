@@ -8,10 +8,10 @@
 
 class TCircuitElement;
 
-// Троичные значения
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 enum class TTernary { NEG = -1, ZERO = 0, POS = 1 };
 
-// Стили линий соединений
+// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 enum class TLineStyle {
     POSITIVE_CONTROL,
     NEGATIVE_CONTROL,
@@ -19,7 +19,7 @@ enum class TLineStyle {
     INTERNAL_CONNECTION
 };
 
-// Точка соединения
+// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 struct TConnectionPoint {
     TCircuitElement* Owner;
     int X, Y;

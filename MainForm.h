@@ -153,6 +153,10 @@ private:
     bool FindFreeLocation(int& x, int& y, int width, int height);
     TPoint GetBestPlacementPosition(int width, int height);
 
+    // Новые методы для исправления проблем
+    TConnectionPoint* FindRestoredConnectionPoint(const TConnectionPoint* originalPoint);
+    void OptimizedDrawCircuit(TCanvas* Canvas);
+
 public:
     __fastcall TMainForm(TComponent* Owner);
 };

@@ -8,7 +8,7 @@
 #include <functional>
 #include <System.Classes.hpp>
 
-// Базовый класс для всех элементов библиотеки
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 class TLibraryElement {
 public:
     virtual ~TLibraryElement() = default;
@@ -19,7 +19,7 @@ public:
     virtual void GetDefaultSize(int& Width, int& Height) const = 0;
 };
 
-// Конкретная реализация элемента библиотеки
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 template<typename T>
 class TConcreteLibraryElement : public TLibraryElement {
 private:
@@ -49,7 +49,7 @@ public:
     }
 };
 
-// Библиотека компонентов
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 class TComponentLibrary {
 private:
     String FName;
@@ -58,13 +58,13 @@ private:
     std::vector<std::unique_ptr<TLibraryElement>> FElements;
     std::map<String, TLibraryElement*> FElementMap;
 
-    // Метод для получения количества элементов
+    // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     int GetElementCount() const { return static_cast<int>(FElements.size()); }
 
 public:
     TComponentLibrary(const String& Name, const String& Description, const String& Version = "1.0");
 
-    // Регистрация элементов
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     template<typename T>
     void RegisterElement(const String& Name, const String& Description,
                         const String& Category = "General", int DefaultWidth = 80, int DefaultHeight = 60) {
@@ -73,14 +73,14 @@ public:
         FElements.push_back(std::move(element));
     }
 
-    // Создание элемента
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     std::unique_ptr<TCircuitElement> CreateElement(const String& Name, int Id, int X, int Y) const;
 
-    // Поиск элемента
+    // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     bool HasElement(const String& Name) const;
     const TLibraryElement* GetElementInfo(const String& Name) const;
 
-    // Получение списков
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     std::vector<String> GetElementNames() const;
     std::vector<String> GetElementNamesByCategory(const String& Category) const;
     std::vector<String> GetCategories() const;
@@ -91,7 +91,7 @@ public:
     __property int ElementCount = { read = GetElementCount };
 };
 
-// Менеджер библиотек
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 class TLibraryManager {
 private:
     std::vector<std::unique_ptr<TComponentLibrary>> FLibraries;
@@ -110,11 +110,11 @@ public:
     TComponentLibrary* GetLibrary(const String& Name) const;
     std::vector<String> GetLibraryNames() const;
 
-    // Создание элементов
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     std::unique_ptr<TCircuitElement> CreateElement(const String& LibraryName, const String& ElementName, int Id, int X, int Y) const;
     std::unique_ptr<TCircuitElement> CreateElementFromCurrent(const String& ElementName, int Id, int X, int Y) const;
 
-    // Поиск элементов
+    // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     bool HasElement(const String& LibraryName, const String& ElementName) const;
     const TLibraryElement* GetElementInfo(const String& LibraryName, const String& ElementName) const;
 };

@@ -11,6 +11,8 @@ TCircuitElement::TCircuitElement(int AId, const String& AName, int X, int Y)
 
 void TCircuitElement::Draw(TCanvas* Canvas) {
     // Базовая реализация - рисуем прямоугольник с именем
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
     Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, FName);
 
@@ -34,12 +36,14 @@ void TCircuitElement::DrawConnectionPoints(TCanvas* Canvas) {
 }
 
 TConnectionPoint* TCircuitElement::GetConnectionAt(int X, int Y) {
+    // Проверяем входы
     for (auto& input : FInputs) {
         if (abs(input.X - X) < 8 && abs(input.Y - Y) < 8) {
             return &input;
         }
     }
 
+    // Проверяем выходы
     for (auto& output : FOutputs) {
         if (abs(output.X - X) < 8 && abs(output.Y - Y) < 8) {
             return &output;
@@ -50,6 +54,9 @@ TConnectionPoint* TCircuitElement::GetConnectionAt(int X, int Y) {
 }
 
 void TCircuitElement::DrawMagneticAmplifier(TCanvas* Canvas, bool IsPowerful) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+
     if (IsPowerful) {
         Canvas->Pen->Width = 2;
         Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
@@ -71,11 +78,16 @@ void TCircuitElement::DrawMagneticAmplifier(TCanvas* Canvas, bool IsPowerful) {
 
     Canvas->Font->Size = 8;
     Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, IsPowerful ? "MA+" : "MA");
+
+    DrawConnectionPoints(Canvas);
 }
 
 void TCircuitElement::DrawTernaryElement(TCanvas* Canvas) {
     int centerX = (FBounds.Left + FBounds.Right) / 2;
     int centerY = (FBounds.Top + FBounds.Bottom) / 2;
+
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
 
     TRect rect1 = TRect(centerX - 30, centerY - 25, centerX - 5, centerY);
     TRect rect2 = TRect(centerX + 5, centerY, centerX + 30, centerY + 25);
@@ -96,6 +108,8 @@ void TCircuitElement::DrawTernaryElement(TCanvas* Canvas) {
 
     Canvas->Font->Size = 8;
     Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "TE");
+
+    DrawConnectionPoints(Canvas);
 }
 
 void TCircuitElement::DrawControlLine(TCanvas* Canvas, const TConnectionPoint& Point) {
@@ -138,19 +152,24 @@ void TCircuitElement::DrawCrossingLine(TCanvas* Canvas, int X1, int Y1, int X2, 
     Canvas->MoveTo(X1, Y1);
     Canvas->LineTo(X2, Y2);
     Canvas->Pen->Style = psSolid;
+    Canvas->Pen->Color = clBlack;
 }
 
 // Реализация базовых элементов
 TMagneticAmplifier::TMagneticAmplifier(int AId, int X, int Y, bool IsPowerful)
-    : TCircuitElement(AId, IsPowerful ? "MA+" : "MA", X, Y), FIsPowered(false) {
+    : TCircuitElement(AId, "Магнитный усилитель", X, Y), FIsPowered(false) {
 
+    // Создаем точки соединения с правильными относительными позициями
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+30, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+22, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    // Немедленно рассчитываем относительные позиции
+    CalculateRelativePositions();
 }
 
 void TMagneticAmplifier::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary power = FInputs[0].Value;
         TTernary control = FInputs[1].Value;
 
@@ -169,15 +188,17 @@ void TMagneticAmplifier::Calculate() {
 }
 
 TTernaryElement::TTernaryElement(int AId, int X, int Y)
-    : TCircuitElement(AId, "TE", X, Y) {
+    : TCircuitElement(AId, "Троичный элемент", X, Y) {
 
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+45, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TTernaryElement::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary in1 = FInputs[0].Value;
         TTernary in2 = FInputs[1].Value;
 
@@ -192,20 +213,25 @@ void TTernaryElement::Calculate() {
 }
 
 TShiftRegister::TShiftRegister(int AId, int X, int Y, int BitCount)
-    : TCircuitElement(AId, "SR", X, Y), FBitCount(BitCount) {
+    : TCircuitElement(AId, "Сдвигающий регистр", X, Y), FBitCount(BitCount) {
 
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+45, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TShiftRegister::Calculate() {
-    if (FInputs.size() >= 2 && FInputs[1].Value == TTernary::POS) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1 && FInputs[1].Value == TTernary::POS) {
         FOutputs[0].Value = FInputs[0].Value;
     }
 }
 
 void TShiftRegister::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+
     int bitWidth = 20;
     for (int i = 0; i < FBitCount; i++) {
         int left = FBounds.Left + i * bitWidth;
@@ -235,9 +261,6 @@ void TShiftRegister::Draw(TCanvas* Canvas) {
 
     Canvas->Font->Size = 8;
     Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "SR");
+
+    DrawConnectionPoints(Canvas);
 }
-
-
-
-
-

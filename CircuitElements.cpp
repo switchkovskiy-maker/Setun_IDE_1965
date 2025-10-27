@@ -6,7 +6,7 @@
 
 // TTernaryTrigger
 TTernaryTrigger::TTernaryTrigger(int AId, int X, int Y)
-    : TCircuitElement(AId, "Trig", X, Y),
+    : TCircuitElement(AId, "Троичный триггер", X, Y),
       FStoredState(TTernary::ZERO) {
 
     FBounds = TRect(X, Y, X + 120, Y + 80);
@@ -17,10 +17,12 @@ TTernaryTrigger::TTernaryTrigger(int AId, int X, int Y)
 
     FOutputs.push_back(TConnectionPoint(this, X+135, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     FOutputs.push_back(TConnectionPoint(this, X+135, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TTernaryTrigger::Calculate() {
-    if (FInputs.size() >= 3) {
+    if (FInputs.size() >= 3 && FOutputs.size() >= 2) {
         TTernary setPos = FInputs[0].Value;
         TTernary setNeg = FInputs[1].Value;
         TTernary reset = FInputs[2].Value;
@@ -42,6 +44,9 @@ void TTernaryTrigger::Calculate() {
 void TTernaryTrigger::Draw(TCanvas* Canvas) {
     int centerX = (FBounds.Left + FBounds.Right) / 2;
     int centerY = (FBounds.Top + FBounds.Bottom) / 2;
+
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
 
     TRect elem1 = TRect(centerX - 40, centerY - 35, centerX - 5, centerY - 5);
     TRect elem2 = TRect(centerX + 5, centerY + 5, centerX + 40, centerY + 35);
@@ -87,7 +92,7 @@ void TTernaryTrigger::Reset() {
 
 // THalfAdder
 THalfAdder::THalfAdder(int AId, int X, int Y)
-    : TCircuitElement(AId, "HAdd", X, Y) {
+    : TCircuitElement(AId, "Полусумматор", X, Y) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
 
@@ -95,6 +100,8 @@ THalfAdder::THalfAdder(int AId, int X, int Y)
     FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+40, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void THalfAdder::Calculate() {
@@ -134,6 +141,8 @@ void THalfAdder::Calculate() {
 }
 
 void THalfAdder::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     Canvas->Font->Size = 8;
@@ -157,7 +166,7 @@ void THalfAdder::Draw(TCanvas* Canvas) {
 
 // TTernaryAdder
 TTernaryAdder::TTernaryAdder(int AId, int X, int Y)
-    : TCircuitElement(AId, "TAdd", X, Y) {
+    : TCircuitElement(AId, "Троичный сумматор", X, Y) {
 
     FBounds = TRect(X, Y, X + 100, Y + 80);
 
@@ -166,6 +175,8 @@ TTernaryAdder::TTernaryAdder(int AId, int X, int Y)
     FInputs.push_back(TConnectionPoint(this, X-15, Y+60, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+115, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     FOutputs.push_back(TConnectionPoint(this, X+115, Y+50, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TTernaryAdder::Calculate() {
@@ -202,6 +213,9 @@ void TTernaryAdder::Calculate() {
 void TTernaryAdder::Draw(TCanvas* Canvas) {
     int centerX = (FBounds.Left + FBounds.Right) / 2;
 
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+
     TRect ha1 = TRect(FBounds.Left + 10, FBounds.Top + 10, centerX - 5, FBounds.Top + 40);
     TRect ha2 = TRect(centerX + 5, FBounds.Top + 30, FBounds.Right - 10, FBounds.Top + 60);
 
@@ -235,7 +249,7 @@ void TTernaryAdder::Draw(TCanvas* Canvas) {
 
 // TDecoder
 TDecoder::TDecoder(int AId, int X, int Y, int InputBits)
-    : TCircuitElement(AId, "Dec", X, Y),
+    : TCircuitElement(AId, "Дешифратор", X, Y),
       FInputBits(InputBits), FOutputCount((int)pow(3, InputBits)) {
 
     FBounds = TRect(X, Y, X + 80, Y + 30 + FOutputCount * 15);
@@ -247,6 +261,8 @@ TDecoder::TDecoder(int AId, int X, int Y, int InputBits)
     for (int i = 0; i < FOutputCount; i++) {
         FOutputs.push_back(TConnectionPoint(this, X+95, Y+15 + i*15, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     }
+
+    CalculateRelativePositions();
 }
 
 void TDecoder::Calculate() {
@@ -265,6 +281,8 @@ void TDecoder::Calculate() {
 }
 
 void TDecoder::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     for (const auto& input : FInputs) {
@@ -294,7 +312,7 @@ void TDecoder::Draw(TCanvas* Canvas) {
 
 // TCounter
 TCounter::TCounter(int AId, int X, int Y, int BitCount)
-    : TCircuitElement(AId, "Cnt", X, Y),
+    : TCircuitElement(AId, "Счетчик", X, Y),
       FCount(0), FMaxCount((int)pow(3, BitCount) - 1) {
 
     FBounds = TRect(X, Y, X + 40 + BitCount * 25, Y + 60);
@@ -302,10 +320,12 @@ TCounter::TCounter(int AId, int X, int Y, int BitCount)
     FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+FBounds.Width()+5, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TCounter::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary inc = FInputs[0].Value;
         TTernary dec = FInputs[1].Value;
 
@@ -321,6 +341,9 @@ void TCounter::Calculate() {
 }
 
 void TCounter::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+
     int bitWidth = 25;
     for (int i = 0; i < (FMaxCount + 1); i++) {
         int left = FBounds.Left + i * bitWidth;
@@ -357,18 +380,181 @@ void TCounter::Reset() {
     FCount = 0;
 }
 
+// TDistributor
+TDistributor::TDistributor(int AId, int X, int Y, int Steps)
+    : TCircuitElement(AId, "Distributor", X, Y),
+      FCurrentStep(0), FTotalSteps(Steps) {
+
+    FBounds = TRect(X, Y, X + 80, Y + 60);
+
+    // Добавляем входы и выходы для распределителя
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+
+    for (int i = 0; i < Steps; i++) {
+        FOutputs.push_back(TConnectionPoint(this, X+95, Y+15 + i*10, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    }
+
+    CalculateRelativePositions();
+}
+
+void TDistributor::Calculate() {
+    if (FInputs.size() >= 2 && FOutputs.size() >= FTotalSteps) {
+        TTernary clock = FInputs[0].Value;
+        TTernary reset = FInputs[1].Value;
+
+        if (reset == TTernary::POS) {
+            FCurrentStep = 0;
+        } else if (clock == TTernary::POS) {
+            FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
+        }
+
+        // Активируем только текущий выход
+        for (int i = 0; i < FOutputs.size(); i++) {
+            FOutputs[i].Value = (i == FCurrentStep) ? TTernary::POS : TTernary::ZERO;
+        }
+    }
+}
+
+void TDistributor::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
+
+    // Рисуем схему распределителя
+    int centerX = (FBounds.Left + FBounds.Right) / 2;
+    int centerY = (FBounds.Top + FBounds.Bottom) / 2;
+
+    // Основной круг
+    Canvas->Ellipse(centerX - 25, centerY - 25, centerX + 25, centerY + 25);
+
+    // Текущая позиция
+    double angle = 2 * M_PI * FCurrentStep / FTotalSteps;
+    int markerX = centerX + (int)(20 * cos(angle));
+    int markerY = centerY + (int)(20 * sin(angle));
+
+    Canvas->Brush->Color = clRed;
+    Canvas->Ellipse(markerX - 3, markerY - 3, markerX + 3, markerY + 3);
+    Canvas->Brush->Color = clWhite;
+
+    for (const auto& input : FInputs) {
+        DrawControlLine(Canvas, input);
+    }
+    for (const auto& output : FOutputs) {
+        DrawControlLine(Canvas, output);
+    }
+
+    Canvas->Font->Size = 8;
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Dist");
+    Canvas->TextOut(FInputs[0].X - 10, FInputs[0].Y - 5, "Clk");
+    Canvas->TextOut(FInputs[1].X - 10, FInputs[1].Y - 5, "Rst");
+
+    // Номера выходов
+    for (int i = 0; i < FOutputs.size(); i++) {
+        Canvas->TextOut(FOutputs[i].X + 5, FOutputs[i].Y - 5, IntToStr(i));
+    }
+
+    DrawConnectionPoints(Canvas);
+}
+
+void TDistributor::AdvanceStep() {
+    FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
+}
+
+// TSwitch
+TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
+    : TCircuitElement(AId, "Switch", X, Y),
+      FSelectedOutput(0) {
+
+    FBounds = TRect(X, Y, X + 60, Y + 40);
+
+    // Один вход и несколько выходов
+    FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
+
+    for (int i = 0; i < OutputCount; i++) {
+        FOutputs.push_back(TConnectionPoint(this, X+75, Y+10 + i*10, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+    }
+
+    CalculateRelativePositions();
+}
+
+void TSwitch::Calculate() {
+    if (FInputs.size() >= 1 && FOutputs.size() > FSelectedOutput) {
+        TTernary inputValue = FInputs[0].Value;
+
+        // Передаем значение только на выбранный выход
+        for (int i = 0; i < FOutputs.size(); i++) {
+            FOutputs[i].Value = (i == FSelectedOutput) ? inputValue : TTernary::ZERO;
+        }
+    }
+}
+
+void TSwitch::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
+    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
+
+    // Рисуем переключатель
+    int centerX = (FBounds.Left + FBounds.Right) / 2;
+    int centerY = (FBounds.Top + FBounds.Bottom) / 2;
+
+    // Основание переключателя
+    Canvas->MoveTo(FBounds.Left + 10, centerY);
+    Canvas->LineTo(FBounds.Right - 10, centerY);
+
+    // Рычаг переключателя
+    int leverX = centerX;
+    int leverY = centerY - 15;
+    Canvas->MoveTo(centerX, centerY);
+    Canvas->LineTo(leverX, leverY);
+
+    // Позиция рычага в зависимости от выбранного выхода
+    double angle = -M_PI/4 + (M_PI/2 * FSelectedOutput / (FOutputs.size() - 1));
+    int endX = centerX + (int)(12 * sin(angle));
+    int endY = centerY - (int)(12 * cos(angle));
+
+    Canvas->MoveTo(centerX, centerY);
+    Canvas->LineTo(endX, endY);
+
+    for (const auto& input : FInputs) {
+        DrawControlLine(Canvas, input);
+    }
+    for (const auto& output : FOutputs) {
+        DrawControlLine(Canvas, output);
+    }
+
+    Canvas->Font->Size = 8;
+    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Switch");
+    Canvas->TextOut(FInputs[0].X - 10, FInputs[0].Y - 5, "In");
+
+    // Номера выходов
+    for (int i = 0; i < FOutputs.size(); i++) {
+        Canvas->TextOut(FOutputs[i].X + 5, FOutputs[i].Y - 5, IntToStr(i));
+    }
+
+    DrawConnectionPoints(Canvas);
+}
+
+void TSwitch::SetSelection(int OutputIndex) {
+    if (OutputIndex >= 0 && OutputIndex < FOutputs.size()) {
+        FSelectedOutput = OutputIndex;
+    }
+}
+
 // TLogicAnd
 TLogicAnd::TLogicAnd(int AId, int X, int Y)
-    : TCircuitElement(AId, "AND", X, Y) {
+    : TCircuitElement(AId, "Логическое И", X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TLogicAnd::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary a = FInputs[0].Value;
         TTernary b = FInputs[1].Value;
 
@@ -377,6 +563,8 @@ void TLogicAnd::Calculate() {
 }
 
 void TLogicAnd::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     Canvas->Font->Size = 10;
@@ -394,16 +582,18 @@ void TLogicAnd::Draw(TCanvas* Canvas) {
 
 // TLogicOr
 TLogicOr::TLogicOr(int AId, int X, int Y)
-    : TCircuitElement(AId, "OR", X, Y) {
+    : TCircuitElement(AId, "Логическое ИЛИ", X, Y) {
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+25, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+75, Y+20, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TLogicOr::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary a = FInputs[0].Value;
         TTernary b = FInputs[1].Value;
 
@@ -412,6 +602,8 @@ void TLogicOr::Calculate() {
 }
 
 void TLogicOr::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     Canvas->Font->Size = 10;
@@ -429,16 +621,18 @@ void TLogicOr::Draw(TCanvas* Canvas) {
 
 // TLogicInhibit
 TLogicInhibit::TLogicInhibit(int AId, int X, int Y)
-    : TCircuitElement(AId, "INH", X, Y) {
+    : TCircuitElement(AId, "Запрет", X, Y) {
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
     FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::NEGATIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+30, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TLogicInhibit::Calculate() {
-    if (FInputs.size() >= 2) {
+    if (FInputs.size() >= 2 && FOutputs.size() >= 1) {
         TTernary a = FInputs[0].Value;
         TTernary b = FInputs[1].Value;
 
@@ -447,6 +641,8 @@ void TLogicInhibit::Calculate() {
 }
 
 void TLogicInhibit::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     Canvas->Font->Size = 8;
@@ -466,17 +662,23 @@ void TLogicInhibit::Draw(TCanvas* Canvas) {
 
 // TGenerator
 TGenerator::TGenerator(int AId, int X, int Y)
-    : TCircuitElement(AId, "Gen", X, Y) {
+    : TCircuitElement(AId, "Генератор", X, Y) {
 
     FBounds = TRect(X, Y, X + 50, Y + 30);
     FOutputs.push_back(TConnectionPoint(this, X+65, Y+15, TTernary::POS, false, TLineStyle::OUTPUT_LINE));
+
+    CalculateRelativePositions();
 }
 
 void TGenerator::Calculate() {
-    FOutputs[0].Value = TTernary::POS;
+    if (FOutputs.size() >= 1) {
+        FOutputs[0].Value = TTernary::POS;
+    }
 }
 
 void TGenerator::Draw(TCanvas* Canvas) {
+    Canvas->Brush->Color = clWhite;
+    Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
     Canvas->Font->Size = 8;
@@ -488,48 +690,4 @@ void TGenerator::Draw(TCanvas* Canvas) {
     }
 
     DrawConnectionPoints(Canvas);
-}
-
-// TDistributor
-TDistributor::TDistributor(int AId, int X, int Y, int Steps)
-    : TCircuitElement(AId, "Dist", X, Y),
-      FCurrentStep(0), FTotalSteps(Steps) {
-
-    FBounds = TRect(X, Y, X + 80, Y + 60);
-}
-
-void TDistributor::Calculate() {
-    // Реализация распределителя
-}
-
-void TDistributor::Draw(TCanvas* Canvas) {
-    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
-    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Dist");
-    DrawConnectionPoints(Canvas);
-}
-
-void TDistributor::AdvanceStep() {
-    FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
-}
-
-// TSwitch
-TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
-    : TCircuitElement(AId, "Switch", X, Y),
-      FSelectedOutput(0) {
-
-    FBounds = TRect(X, Y, X + 60, Y + 40);
-}
-
-void TSwitch::Calculate() {
-    // Реализация переключателя
-}
-
-void TSwitch::Draw(TCanvas* Canvas) {
-    Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
-    Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Switch");
-    DrawConnectionPoints(Canvas);
-}
-
-void TSwitch::SetSelection(int OutputIndex) {
-    FSelectedOutput = OutputIndex;
 }

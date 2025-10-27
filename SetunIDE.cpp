@@ -10,7 +10,7 @@ int WINAPI _tWinMain(HINSTANCE, HINSTANCE, LPTSTR, int)
 	{
 		Application->Initialize();
 		Application->MainFormOnTaskBar = true;
-		Application->Title = "Setun IDE - Троичная логика по книге 1965 года (Тимошенко А.Н. 2022 год)";
+		Application->Title = "Setun IDE)";
 		Application->CreateForm(__classid(TMainForm), &MainForm);
 		Application->Run();
 	}
