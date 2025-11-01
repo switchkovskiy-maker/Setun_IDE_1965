@@ -15,6 +15,15 @@
 
 TMainForm *MainForm;
 
+// Временный класс для загрузки соединений
+class TTempCircuitElement : public TCircuitElement {
+public:
+    TTempCircuitElement(int AId) : TCircuitElement(AId, "Temp", 0, 0) {}
+    void Calculate() override {
+        // Пустая реализация для временного элемента
+    }
+};
+
 // Реализация TSubCircuit с правильной семантикой перемещения
 TSubCircuit::TSubCircuit(int AId, int X, int Y,
                         std::vector<std::unique_ptr<TCircuitElement>>&& Elements,
@@ -135,6 +144,101 @@ void TSubCircuit::UpdateExternalConnections() {
     if (!FOutputs.empty() && !FInternalElements.empty() && !FInternalElements[0]->Outputs.empty()) {
         FOutputs[0].Value = FInternalElements[0]->Outputs[0].Value;
     }
+}
+
+// Методы сериализации TSubCircuit
+void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    
+    // Сохраняем внутренние элементы
+    IniFile->WriteInteger(Section, "InternalElementCount", static_cast<int>(FInternalElements.size()));
+    
+    for (int i = 0; i < FInternalElements.size(); i++) {
+        String internalSection = Section + "_Internal_" + IntToStr(i);
+        MainForm->SaveElementToIni(FInternalElements[i].get(), IniFile, internalSection);
+    }
+    
+    // Сохраняем внутренние соединения
+    IniFile->WriteInteger(Section, "InternalConnectionCount", static_cast<int>(FInternalConnections.size()));
+    
+    for (int i = 0; i < FInternalConnections.size(); i++) {
+        String connSection = Section + "_InternalConn_" + IntToStr(i);
+        auto& conn = FInternalConnections[i];
+        
+        if (conn.first && conn.second) {
+            MainForm->SaveConnectionPoint(conn.first, IniFile, connSection, "From");
+            MainForm->SaveConnectionPoint(conn.second, IniFile, connSection, "To");
+        }
+    }
+}
+
+void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
+	TCircuitElement::LoadFromIni(IniFile, Section);
+
+    // Загружаем внутренние элементы
+    int internalElementCount = IniFile->ReadInteger(Section, "InternalElementCount", 0);
+    
+    for (int i = 0; i < internalElementCount; i++) {
+        String internalSection = Section + "_Internal_" + IntToStr(i);
+        auto element = MainForm->LoadElementFromIni(IniFile, internalSection);
+        
+        if (element) {
+            FInternalElements.push_back(std::move(element));
+        }
+    }
+    
+    // Загружаем внутренние соединения
+    int internalConnCount = IniFile->ReadInteger(Section, "InternalConnectionCount", 0);
+    
+    for (int i = 0; i < internalConnCount; i++) {
+        String connSection = Section + "_InternalConn_" + IntToStr(i);
+        
+        TConnectionPoint* fromPoint = MainForm->LoadConnectionPoint(IniFile, connSection, "From", this);
+        TConnectionPoint* toPoint = MainForm->LoadConnectionPoint(IniFile, connSection, "To", this);
+        
+        if (fromPoint && toPoint) {
+            // Находим реальные точки во внутренних элементах
+            TConnectionPoint* realFromPoint = FindConnectionPointInInternalElements(fromPoint);
+            TConnectionPoint* realToPoint = FindConnectionPointInInternalElements(toPoint);
+            
+            if (realFromPoint && realToPoint) {
+                FInternalConnections.push_back(std::make_pair(realFromPoint, realToPoint));
+            }
+            
+            delete fromPoint;
+            delete toPoint;
+        }
+    }
+    
+    // Обновляем внешние соединения
+    CreateExternalConnections();
+}
+
+TCircuitElement* TSubCircuit::FindInternalElementById(int Id) {
+    for (auto& element : FInternalElements) {
+        if (element->Id == Id) {
+            return element.get();
+        }
+    }
+    return nullptr;
+}
+
+TConnectionPoint* TSubCircuit::FindConnectionPointInInternalElements(const TConnectionPoint* pointTemplate) {
+    if (!pointTemplate || !pointTemplate->Owner) return nullptr;
+    
+    TCircuitElement* element = FindInternalElementById(pointTemplate->Owner->Id);
+    if (!element) return nullptr;
+    
+    auto& points = pointTemplate->IsInput ? element->Inputs : element->Outputs;
+    
+    for (auto& point : points) {
+        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 && 
+            fabs(point.RelY - pointTemplate->RelY) < 0.001) {
+            return &point;
+        }
+    }
+    
+    return nullptr;
 }
 
 // Конструктор MainForm
@@ -348,7 +452,6 @@ void TMainForm::CreateBasicLibrary() {
     FLibraryManager->RegisterLibrary(std::move(FBasicLibrary));
 }
 
-
 bool TMainForm::LoadStandardLibrary() {
     String currentDir = GetCurrentDir();
     String dllPath = currentDir + "\\StandardLibrary.dll";
@@ -433,7 +536,6 @@ void TMainForm::UnloadStandardLibrary() {
 }
 
 // Новые методы для создания элементов через библиотеки
-// Обновленный метод CreateElement
 std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryName, const String& ElementName, int X, int Y) {
     try {
         if (!FLibraryManager) {
@@ -457,8 +559,6 @@ std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryN
     }
 }
 
-
-// Обновленный метод CreateElementFromCurrent с улучшенной обработкой ошибок
 std::unique_ptr<TCircuitElement> TMainForm::CreateElementFromCurrent(const String& ElementName, int X, int Y) {
     try {
         if (!FLibraryManager) {
@@ -485,7 +585,6 @@ std::unique_ptr<TCircuitElement> TMainForm::CreateElementFromCurrent(const Strin
         return nullptr;
     }
 }
-
 
 void TMainForm::UpdateLibrarySelector() {
     cmbLibrarySelector->Items->Clear();
@@ -562,51 +661,41 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
     StatusBar->Panels->Items[0]->Text = "Добавлен: " + elementName;
 }
 
-// Упрощенная сериализация для демонстрации
+// Новая реализация сериализации для сохранения схемы
 void TMainForm::SaveSchemeToFile(const String& FileName) {
     std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
 
+    // Сохраняем основную информацию
     iniFile->WriteInteger("Scheme", "ElementCount", static_cast<int>(FElements.size()));
     iniFile->WriteInteger("Scheme", "ConnectionCount", static_cast<int>(FConnections.size()));
     iniFile->WriteInteger("Scheme", "NextElementId", FNextElementId);
-    iniFile->WriteString("Scheme", "Version", "2.0");
+    iniFile->WriteString("Scheme", "Version", "3.0");
 
-    // Сохраняем информацию о библиотеках и элементах
+    // Сохраняем элементы
     for (int i = 0; i < FElements.size(); i++) {
         String section = "Element_" + IntToStr(i);
-        TCircuitElement* element = FElements[i].get();
-
-        iniFile->WriteString(section, "Name", element->Name);
-        iniFile->WriteInteger(section, "Id", element->Id);
-        iniFile->WriteInteger(section, "X", element->Bounds.Left);
-        iniFile->WriteInteger(section, "Y", element->Bounds.Top);
-        iniFile->WriteInteger(section, "Width", element->Bounds.Width());
-        iniFile->WriteInteger(section, "Height", element->Bounds.Height());
+        SaveElementToIni(FElements[i].get(), iniFile.get(), section);
     }
 
-    // Сохраняем соединения (упрощенно)
+    // Сохраняем соединения
     for (int i = 0; i < FConnections.size(); i++) {
         String section = "Connection_" + IntToStr(i);
         auto& connection = FConnections[i];
 
-        // Сохраняем индексы элементов и точки соединения
         if (connection.first && connection.second) {
-            iniFile->WriteInteger(section, "FromElementId", connection.first->Owner->Id);
-            iniFile->WriteInteger(section, "ToElementId", connection.second->Owner->Id);
-            iniFile->WriteInteger(section, "FromPointIndex", 0); // Упрощенно
-            iniFile->WriteInteger(section, "ToPointIndex", 0);   // Упрощенно
+            SaveConnectionPoint(connection.first, iniFile.get(), section, "From");
+            SaveConnectionPoint(connection.second, iniFile.get(), section, "To");
         }
     }
 
     iniFile->UpdateFile();
 }
 
+// Новая реализация загрузки схемы
 void TMainForm::LoadSchemeFromFile(const String& FileName) {
     std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
 
-    // Проверяем версию формата
     String version = iniFile->ReadString("Scheme", "Version", "1.0");
-
     if (version == "1.0") {
         ShowMessage("Формат файла устарел. Используйте новую версию для сохранения схем.");
         return;
@@ -618,62 +707,43 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
     int connectionCount = iniFile->ReadInteger("Scheme", "ConnectionCount", 0);
     FNextElementId = iniFile->ReadInteger("Scheme", "NextElementId", 1);
 
-    // Находим границы загружаемой схемы для центрирования
-    int minX = MAXINT, minY = MAXINT, maxX = 0, maxY = 0;
-    std::vector<TRect> loadedBounds;
-
-    // Сначала собираем информацию о всех элементах
+    // Загружаем элементы
+    std::map<int, TCircuitElement*> idToElementMap;
+    
     for (int i = 0; i < elementCount; i++) {
         String section = "Element_" + IntToStr(i);
-
-        int x = iniFile->ReadInteger(section, "X", 0);
-        int y = iniFile->ReadInteger(section, "Y", 0);
-        int width = iniFile->ReadInteger(section, "Width", 80);
-        int height = iniFile->ReadInteger(section, "Height", 60);
-
-        TRect bounds(x, y, x + width, y + height);
-        loadedBounds.push_back(bounds);
-
-        minX = std::min(minX, x);
-        minY = std::min(minY, y);
-        maxX = std::max(maxX, x + width);
-        maxY = std::max(maxY, y + height);
-    }
-
-    // Вычисляем смещение для центрирования
-    int schemeWidth = maxX - minX;
-    int schemeHeight = maxY - minY;
-
-    // Центр видимой области
-    TPoint visibleCenter = GetVisibleAreaCenter();
-
-    // Смещение для центрирования схемы
-    int offsetX = visibleCenter.X - (minX + schemeWidth / 2);
-    int offsetY = visibleCenter.Y - (minY + schemeHeight / 2);
-
-    // Загружаем элементы со смещением для центрирования
-    for (int i = 0; i < elementCount; i++) {
-        String section = "Element_" + IntToStr(i);
-
-        String name = iniFile->ReadString(section, "Name", "");
-        int id = iniFile->ReadInteger(section, "Id", 0);
-        int x = iniFile->ReadInteger(section, "X", 0) + offsetX;
-        int y = iniFile->ReadInteger(section, "Y", 0) + offsetY;
-        int width = iniFile->ReadInteger(section, "Width", 80);
-        int height = iniFile->ReadInteger(section, "Height", 60);
-
-        // Создаем элемент по имени из файла
-        auto element = CreateElementFromCurrent(name, x, y);
+        auto element = LoadElementFromIni(iniFile.get(), section);
+        
         if (element) {
-            element->SetId(id);
-            element->SetBounds(TRect(x, y, x + width, y + height));
+            idToElementMap[element->Id] = element.get();
             FElements.push_back(std::move(element));
-        } else {
-            ShowMessage("Не удалось создать элемент: " + name);
         }
     }
 
-    // Обновляем размеры и центрируем
+    // Загружаем соединения
+    for (int i = 0; i < connectionCount; i++) {
+        String section = "Connection_" + IntToStr(i);
+        
+        TConnectionPoint* fromPoint = LoadConnectionPoint(iniFile.get(), section, "From", nullptr);
+        TConnectionPoint* toPoint = LoadConnectionPoint(iniFile.get(), section, "To", nullptr);
+        
+        if (fromPoint && toPoint) {
+            // Находим реальные точки соединения в загруженных элементах
+            TCircuitElement* fromElement = idToElementMap[fromPoint->Owner->Id];
+            TCircuitElement* toElement = idToElementMap[toPoint->Owner->Id];
+            
+            TConnectionPoint* realFromPoint = FindConnectionPointInElement(fromElement, fromPoint);
+            TConnectionPoint* realToPoint = FindConnectionPointInElement(toElement, toPoint);
+            
+            if (realFromPoint && realToPoint) {
+                FConnections.push_back(std::make_pair(realFromPoint, realToPoint));
+            }
+            
+            delete fromPoint;
+            delete toPoint;
+        }
+    }
+
     UpdatePaintBoxSize();
     CenterCircuit();
     CircuitImage->Repaint();
@@ -682,6 +752,115 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
                                        " (элементов: " + IntToStr(elementCount) + ")";
 }
 
+// Методы для сериализации элементов
+void TMainForm::SaveElementToIni(TCircuitElement* Element, TIniFile* IniFile, const String& Section) {
+    if (Element) {
+        Element->SaveToIni(IniFile, Section);
+    }
+}
+
+std::unique_ptr<TCircuitElement> TMainForm::LoadElementFromIni(TIniFile* IniFile, const String& Section) {
+    String className = IniFile->ReadString(Section, "ClassName", "");
+    int id = IniFile->ReadInteger(Section, "Id", 0);
+    int x = IniFile->ReadInteger(Section, "X", 0);
+    int y = IniFile->ReadInteger(Section, "Y", 0);
+    
+    auto element = CreateElementByClassName(className, id, x, y);
+    if (element) {
+        element->LoadFromIni(IniFile, Section);
+    }
+    
+    return element;
+}
+
+std::unique_ptr<TCircuitElement> TMainForm::CreateElementByClassName(const String& ClassName, int Id, int X, int Y) {
+    if (ClassName == "TMagneticAmplifier") {
+        return std::make_unique<TMagneticAmplifier>(Id, X, Y, false);
+    } else if (ClassName == "TTernaryElement") {
+        return std::make_unique<TTernaryElement>(Id, X, Y);
+    } else if (ClassName == "TShiftRegister") {
+        return std::make_unique<TShiftRegister>(Id, X, Y, 4);
+    } else if (ClassName == "TTernaryTrigger") {
+        return std::make_unique<TTernaryTrigger>(Id, X, Y);
+    } else if (ClassName == "THalfAdder") {
+        return std::make_unique<THalfAdder>(Id, X, Y);
+    } else if (ClassName == "TTernaryAdder") {
+        return std::make_unique<TTernaryAdder>(Id, X, Y);
+    } else if (ClassName == "TDecoder") {
+        return std::make_unique<TDecoder>(Id, X, Y, 2);
+    } else if (ClassName == "TCounter") {
+        return std::make_unique<TCounter>(Id, X, Y, 3);
+    } else if (ClassName == "TDistributor") {
+        return std::make_unique<TDistributor>(Id, X, Y, 8);
+    } else if (ClassName == "TSwitch") {
+        return std::make_unique<TSwitch>(Id, X, Y, 3);
+    } else if (ClassName == "TLogicAnd") {
+        return std::make_unique<TLogicAnd>(Id, X, Y);
+    } else if (ClassName == "TLogicOr") {
+        return std::make_unique<TLogicOr>(Id, X, Y);
+    } else if (ClassName == "TLogicInhibit") {
+        return std::make_unique<TLogicInhibit>(Id, X, Y);
+    } else if (ClassName == "TGenerator") {
+        return std::make_unique<TGenerator>(Id, X, Y);
+    } else if (ClassName == "TSubCircuit") {
+        return std::make_unique<TSubCircuit>(Id, X, Y, 
+            std::vector<std::unique_ptr<TCircuitElement>>(),
+            std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>());
+    }
+    
+    return nullptr;
+}
+
+void TMainForm::SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile, 
+                                   const String& Section, const String& Prefix) {
+    if (!Point || !Point->Owner) return;
+    
+    IniFile->WriteInteger(Section, Prefix + "ElementId", Point->Owner->Id);
+    IniFile->WriteFloat(Section, Prefix + "RelX", Point->RelX);
+    IniFile->WriteFloat(Section, Prefix + "RelY", Point->RelY);
+    IniFile->WriteBool(Section, Prefix + "IsInput", Point->IsInput);
+}
+
+TConnectionPoint* TMainForm::LoadConnectionPoint(TIniFile* IniFile, const String& Section, 
+                                                const String& Prefix, TCircuitElement* Owner) {
+    int elementId = IniFile->ReadInteger(Section, Prefix + "ElementId", -1);
+    if (elementId == -1) return nullptr;
+    
+    // Создаем временный элемент-заглушку для точки соединения
+    auto tempElement = std::make_unique<TTempCircuitElement>(elementId);
+    
+    auto point = new TConnectionPoint(
+        tempElement.get(),
+        0, 0,
+        TTernary::ZERO,
+        IniFile->ReadBool(Section, Prefix + "IsInput", true),
+        TLineStyle::POSITIVE_CONTROL
+    );
+    
+    point->RelX = IniFile->ReadFloat(Section, Prefix + "RelX", 0);
+    point->RelY = IniFile->ReadFloat(Section, Prefix + "RelY", 0);
+    
+    // Сохраняем временный элемент, чтобы избежать его уничтожения
+    static std::vector<std::unique_ptr<TCircuitElement>> tempElements;
+    tempElements.push_back(std::move(tempElement));
+    
+    return point;
+}
+
+TConnectionPoint* TMainForm::FindConnectionPointInElement(TCircuitElement* element, const TConnectionPoint* pointTemplate) {
+    if (!element) return nullptr;
+
+    auto& points = pointTemplate->IsInput ? element->Inputs : element->Outputs;
+    
+    for (auto& point : points) {
+        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 && 
+            fabs(point.RelY - pointTemplate->RelY) < 0.001) {
+            return &point;
+        }
+    }
+    
+    return nullptr;
+}
 
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
     DeleteSelectedElements();
@@ -706,7 +885,6 @@ void __fastcall TMainForm::btnClearWorkspaceClick(TObject *Sender) {
         StatusBar->Panels->Items[0]->Text = "Рабочая область очищена.";
     }
 }
-
 
 void __fastcall TMainForm::CircuitImagePaint(TObject *Sender) {
     DrawCircuit();
@@ -743,7 +921,7 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         canvas->Pen->Color = clSilver;
         canvas->Pen->Style = psDot;
         int gridSize = static_cast<int>(20 * FZoomFactor);
-        if (gridSize > 2) { // Не рисуем слишком мелкую сетку
+        if (gridSize > 2) {
             for (int x = 0; x < CircuitImage->Width; x += gridSize) {
                 canvas->MoveTo(x, 0);
                 canvas->LineTo(x, CircuitImage->Height);
@@ -779,7 +957,7 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         int dx = screenEnd.X - screenStart.X;
         int dy = screenEnd.Y - screenStart.Y;
         double length = sqrt(dx*dx + dy*dy);
-        if (length > 15) { // Минимальная длина для отображения стрелки
+        if (length > 15) {
             double unitX = dx / length;
             double unitY = dy / length;
 
@@ -827,7 +1005,7 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         canvas->Brush->Style = bsSolid;
     }
 
-    // Прямоугольник выделения (уже в экранных координатах)
+    // Прямоугольник выделения
     if (FIsSelecting) {
         canvas->Pen->Color = clBlue;
         canvas->Pen->Style = psDash;
@@ -904,7 +1082,7 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                         // Клик на выходной точке - начинаем соединение
                         FConnectionStart = conn;
                         FIsConnecting = true;
-                        btnConnectionMode->Down = true; // Автоматически включаем режим соединения
+                        btnConnectionMode->Down = true;
                         StatusBar->Panels->Items[0]->Text = "Режим соединения. Выберите входную точку.";
                     } else {
                         StatusBar->Panels->Items[0]->Text = "Ошибка: первая точка должна быть выходом (синяя)";
@@ -933,7 +1111,7 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                     }
                     FIsConnecting = false;
                     FConnectionStart = nullptr;
-                    btnConnectionMode->Down = false; // Автоматически выходим из режима соединения
+                    btnConnectionMode->Down = false;
                     CircuitImage->Repaint();
                 }
                 return;
@@ -991,7 +1169,6 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 
         if (!elementFound) {
             FIsSelecting = true;
-            // FSelectionRect задается в экранных координатах
             FSelectionRect = TRect(X, Y, X, Y);
             if (!Shift.Contains(ssCtrl)) {
                 FSelectedElements.clear();
@@ -1304,7 +1481,6 @@ void TMainForm::CenterCircuit() {
     CircuitImage->Repaint();
 }
 
-
 TRect TMainForm::GetCircuitBounds() {
     if (FElements.empty()) {
         return TRect(0, 0, CircuitImage->Width, CircuitImage->Height);
@@ -1351,7 +1527,6 @@ void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
 std::vector<TCircuitElement*> TMainForm::GetSelectedElements() {
     return FSelectedElements;
 }
-
 
 void TMainForm::CreateSubCircuitFromSelection() {
     auto selectedElements = GetSelectedElements();
@@ -1443,7 +1618,6 @@ TConnectionPoint* TMainForm::FindRestoredConnectionPoint(const TConnectionPoint*
             // Находим соответствующую точку соединения по относительным координатам
             if (originalPoint->IsInput) {
                 for (auto& input : element->Inputs) {
-                    // Сравниваем относительные позиции для точного соответствия
                     if (abs(input.RelX - originalPoint->RelX) < 0.01 &&
                         abs(input.RelY - originalPoint->RelY) < 0.01) {
                         return &input;
@@ -1478,12 +1652,11 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
         auto newElement = CreateElementFromCurrent(element->Name, originalBounds.Left, originalBounds.Top);
         if (newElement) {
             newElement->SetBounds(originalBounds);
-            newElement->CalculateRelativePositions(); // Важно: пересчитываем позиции точек
+            newElement->CalculateRelativePositions();
 
             // Восстанавливаем состояния
             for (size_t i = 0; i < std::min(element->Inputs.size(), newElement->Inputs.size()); ++i) {
                 newElement->Inputs[i].Value = element->Inputs[i].Value;
-                // Копируем относительные позиции для точного восстановления
                 newElement->Inputs[i].RelX = element->Inputs[i].RelX;
                 newElement->Inputs[i].RelY = element->Inputs[i].RelY;
             }
@@ -1499,7 +1672,6 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
 
     // Восстанавливаем ВСЕ соединения
     for (const auto& conn : internalConnections) {
-        // Находим соответствующие точки в восстановленных элементах
         TConnectionPoint* fromPoint = FindRestoredConnectionPoint(conn.first);
         TConnectionPoint* toPoint = FindRestoredConnectionPoint(conn.second);
 

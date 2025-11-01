@@ -6,6 +6,7 @@
 #include <System.Types.hpp>
 #include <vector>
 #include <System.Classes.hpp>
+#include <System.IniFiles.hpp>
 
 class TCircuitElement {
 protected:
@@ -26,7 +27,9 @@ public:
     TCircuitElement(int AId, const String& AName, int X, int Y);
     virtual ~TCircuitElement() {}
 
-    virtual void Calculate() = 0;
+    // Базовая реализация Calculate (может быть переопределена в производных классах)
+    virtual void Calculate() { /* Базовая реализация - ничего не делает */ }
+
     virtual void Draw(TCanvas* Canvas);
     virtual TConnectionPoint* GetConnectionAt(int X, int Y);
 
@@ -80,6 +83,11 @@ public:
         return nullptr;
     }
 
+    // Методы сериализации
+    virtual String GetClassName() const { return "TCircuitElement"; }
+    virtual void SaveToIni(TIniFile* IniFile, const String& Section) const;
+    virtual void LoadFromIni(TIniFile* IniFile, const String& Section);
+
     __property int Id = { read = FId };
     __property String Name = { read = FName };
     __property TRect Bounds = { read = FBounds };
@@ -96,12 +104,14 @@ private:
 public:
     TMagneticAmplifier(int AId, int X, int Y, bool IsPowerful = false);
     void Calculate() override;
+    virtual String GetClassName() const override { return "TMagneticAmplifier"; }
 };
 
 class TTernaryElement : public TCircuitElement {
 public:
     TTernaryElement(int AId, int X, int Y);
     void Calculate() override;
+    virtual String GetClassName() const override { return "TTernaryElement"; }
 };
 
 class TShiftRegister : public TCircuitElement {
@@ -112,6 +122,9 @@ public:
     TShiftRegister(int AId, int X, int Y, int BitCount = 4);
     void Calculate() override;
     void Draw(TCanvas* Canvas) override;
+    virtual String GetClassName() const override { return "TShiftRegister"; }
+    virtual void SaveToIni(TIniFile* IniFile, const String& Section) const override;
+    virtual void LoadFromIni(TIniFile* IniFile, const String& Section) override;
 };
 
 #endif

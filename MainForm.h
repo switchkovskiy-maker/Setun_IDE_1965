@@ -157,6 +157,18 @@ private:
     TConnectionPoint* FindRestoredConnectionPoint(const TConnectionPoint* originalPoint);
     void OptimizedDrawCircuit(TCanvas* Canvas);
 
+    // Методы для сериализации
+    void SaveElementToIni(TCircuitElement* Element, TIniFile* IniFile, const String& Section);
+    std::unique_ptr<TCircuitElement> LoadElementFromIni(TIniFile* IniFile, const String& Section);
+    void SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile, const String& Section, const String& Prefix);
+    TConnectionPoint* LoadConnectionPoint(TIniFile* IniFile, const String& Section, const String& Prefix, TCircuitElement* Owner);
+    TConnectionPoint* FindConnectionPointInElement(TCircuitElement* element, const TConnectionPoint* pointTemplate);
+    std::unique_ptr<TCircuitElement> CreateElementByClassName(const String& ClassName, int Id, int X, int Y);
+
+protected:
+    // Делаем методы доступными для TSubCircuit
+    friend class TSubCircuit;
+    
 public:
     __fastcall TMainForm(TComponent* Owner);
 };
@@ -176,9 +188,16 @@ public:
     const std::vector<std::unique_ptr<TCircuitElement>>& GetInternalElements() const { return FInternalElements; }
     const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& GetInternalConnections() const { return FInternalConnections; }
 
+    // Методы сериализации
+    virtual String GetClassName() const override { return "TSubCircuit"; }
+    virtual void SaveToIni(TIniFile* IniFile, const String& Section) const override;
+    virtual void LoadFromIni(TIniFile* IniFile, const String& Section) override;
+
 private:
     void CreateExternalConnections();
     void UpdateExternalConnections();
+    TCircuitElement* FindInternalElementById(int Id);
+    TConnectionPoint* FindConnectionPointInInternalElements(const TConnectionPoint* pointTemplate);
 };
 
 extern PACKAGE TMainForm *MainForm;

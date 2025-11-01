@@ -90,6 +90,17 @@ void TTernaryTrigger::Reset() {
     FStoredState = TTernary::ZERO;
 }
 
+void TTernaryTrigger::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "StoredState", static_cast<int>(FStoredState));
+}
+
+void TTernaryTrigger::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    int stateValue = IniFile->ReadInteger(Section, "StoredState", 0);
+    FStoredState = static_cast<TTernary>(stateValue);
+}
+
 // THalfAdder
 THalfAdder::THalfAdder(int AId, int X, int Y)
     : TCircuitElement(AId, "Полусумматор", X, Y) {
@@ -310,6 +321,17 @@ void TDecoder::Draw(TCanvas* Canvas) {
     DrawConnectionPoints(Canvas);
 }
 
+void TDecoder::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "InputBits", FInputBits);
+}
+
+void TDecoder::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    FInputBits = IniFile->ReadInteger(Section, "InputBits", 2);
+    FOutputCount = static_cast<int>(pow(3, FInputBits));
+}
+
 // TCounter
 TCounter::TCounter(int AId, int X, int Y, int BitCount)
     : TCircuitElement(AId, "Счетчик", X, Y),
@@ -380,6 +402,18 @@ void TCounter::Reset() {
     FCount = 0;
 }
 
+void TCounter::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "Count", FCount);
+    IniFile->WriteInteger(Section, "MaxCount", FMaxCount);
+}
+
+void TCounter::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    FCount = IniFile->ReadInteger(Section, "Count", 0);
+    FMaxCount = IniFile->ReadInteger(Section, "MaxCount", static_cast<int>(pow(3, 2) - 1));
+}
+
 // TDistributor
 TDistributor::TDistributor(int AId, int X, int Y, int Steps)
     : TCircuitElement(AId, "Distributor", X, Y),
@@ -387,7 +421,6 @@ TDistributor::TDistributor(int AId, int X, int Y, int Steps)
 
     FBounds = TRect(X, Y, X + 80, Y + 60);
 
-    // Добавляем входы и выходы для распределителя
     FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+40, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
 
@@ -409,7 +442,6 @@ void TDistributor::Calculate() {
             FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
         }
 
-        // Активируем только текущий выход
         for (int i = 0; i < FOutputs.size(); i++) {
             FOutputs[i].Value = (i == FCurrentStep) ? TTernary::POS : TTernary::ZERO;
         }
@@ -421,14 +453,11 @@ void TDistributor::Draw(TCanvas* Canvas) {
     Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
-    // Рисуем схему распределителя
     int centerX = (FBounds.Left + FBounds.Right) / 2;
     int centerY = (FBounds.Top + FBounds.Bottom) / 2;
 
-    // Основной круг
     Canvas->Ellipse(centerX - 25, centerY - 25, centerX + 25, centerY + 25);
 
-    // Текущая позиция
     double angle = 2 * M_PI * FCurrentStep / FTotalSteps;
     int markerX = centerX + (int)(20 * cos(angle));
     int markerY = centerY + (int)(20 * sin(angle));
@@ -449,7 +478,6 @@ void TDistributor::Draw(TCanvas* Canvas) {
     Canvas->TextOut(FInputs[0].X - 10, FInputs[0].Y - 5, "Clk");
     Canvas->TextOut(FInputs[1].X - 10, FInputs[1].Y - 5, "Rst");
 
-    // Номера выходов
     for (int i = 0; i < FOutputs.size(); i++) {
         Canvas->TextOut(FOutputs[i].X + 5, FOutputs[i].Y - 5, IntToStr(i));
     }
@@ -461,6 +489,18 @@ void TDistributor::AdvanceStep() {
     FCurrentStep = (FCurrentStep + 1) % FTotalSteps;
 }
 
+void TDistributor::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "CurrentStep", FCurrentStep);
+    IniFile->WriteInteger(Section, "TotalSteps", FTotalSteps);
+}
+
+void TDistributor::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    FCurrentStep = IniFile->ReadInteger(Section, "CurrentStep", 0);
+    FTotalSteps = IniFile->ReadInteger(Section, "TotalSteps", 8);
+}
+
 // TSwitch
 TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
     : TCircuitElement(AId, "Switch", X, Y),
@@ -468,7 +508,6 @@ TSwitch::TSwitch(int AId, int X, int Y, int OutputCount)
 
     FBounds = TRect(X, Y, X + 60, Y + 40);
 
-    // Один вход и несколько выходов
     FInputs.push_back(TConnectionPoint(this, X-15, Y+20, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
 
     for (int i = 0; i < OutputCount; i++) {
@@ -482,7 +521,6 @@ void TSwitch::Calculate() {
     if (FInputs.size() >= 1 && FOutputs.size() > FSelectedOutput) {
         TTernary inputValue = FInputs[0].Value;
 
-        // Передаем значение только на выбранный выход
         for (int i = 0; i < FOutputs.size(); i++) {
             FOutputs[i].Value = (i == FSelectedOutput) ? inputValue : TTernary::ZERO;
         }
@@ -494,21 +532,17 @@ void TSwitch::Draw(TCanvas* Canvas) {
     Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
 
-    // Рисуем переключатель
     int centerX = (FBounds.Left + FBounds.Right) / 2;
     int centerY = (FBounds.Top + FBounds.Bottom) / 2;
 
-    // Основание переключателя
     Canvas->MoveTo(FBounds.Left + 10, centerY);
     Canvas->LineTo(FBounds.Right - 10, centerY);
 
-    // Рычаг переключателя
     int leverX = centerX;
     int leverY = centerY - 15;
     Canvas->MoveTo(centerX, centerY);
     Canvas->LineTo(leverX, leverY);
 
-    // Позиция рычага в зависимости от выбранного выхода
     double angle = -M_PI/4 + (M_PI/2 * FSelectedOutput / (FOutputs.size() - 1));
     int endX = centerX + (int)(12 * sin(angle));
     int endY = centerY - (int)(12 * cos(angle));
@@ -527,7 +561,6 @@ void TSwitch::Draw(TCanvas* Canvas) {
     Canvas->TextOut(FBounds.Left + 5, FBounds.Top + 5, "Switch");
     Canvas->TextOut(FInputs[0].X - 10, FInputs[0].Y - 5, "In");
 
-    // Номера выходов
     for (int i = 0; i < FOutputs.size(); i++) {
         Canvas->TextOut(FOutputs[i].X + 5, FOutputs[i].Y - 5, IntToStr(i));
     }
@@ -539,6 +572,16 @@ void TSwitch::SetSelection(int OutputIndex) {
     if (OutputIndex >= 0 && OutputIndex < FOutputs.size()) {
         FSelectedOutput = OutputIndex;
     }
+}
+
+void TSwitch::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "SelectedOutput", FSelectedOutput);
+}
+
+void TSwitch::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    FSelectedOutput = IniFile->ReadInteger(Section, "SelectedOutput", 0);
 }
 
 // TLogicAnd

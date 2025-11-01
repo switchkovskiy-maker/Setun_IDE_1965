@@ -264,3 +264,95 @@ void TShiftRegister::Draw(TCanvas* Canvas) {
 
     DrawConnectionPoints(Canvas);
 }
+
+void TShiftRegister::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    TCircuitElement::SaveToIni(IniFile, Section);
+    IniFile->WriteInteger(Section, "BitCount", FBitCount);
+}
+
+void TShiftRegister::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    TCircuitElement::LoadFromIni(IniFile, Section);
+    FBitCount = IniFile->ReadInteger(Section, "BitCount", 4);
+}
+
+// Реализация методов сериализации TCircuitElement
+void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const {
+    IniFile->WriteString(Section, "ClassName", GetClassName());
+    IniFile->WriteString(Section, "Name", FName);
+    IniFile->WriteInteger(Section, "Id", FId);
+    IniFile->WriteInteger(Section, "X", FBounds.Left);
+    IniFile->WriteInteger(Section, "Y", FBounds.Top);
+    IniFile->WriteInteger(Section, "Width", FBounds.Width());
+    IniFile->WriteInteger(Section, "Height", FBounds.Height());
+    
+    // Сохраняем состояние
+    int stateValue = static_cast<int>(FCurrentState);
+    IniFile->WriteInteger(Section, "CurrentState", stateValue);
+    
+    // Сохраняем точки входа
+    IniFile->WriteInteger(Section, "InputCount", FInputs.size());
+    for (int i = 0; i < FInputs.size(); i++) {
+        String inputSection = Section + "_Input_" + IntToStr(i);
+        IniFile->WriteFloat(inputSection, "RelX", FInputs[i].RelX);
+        IniFile->WriteFloat(inputSection, "RelY", FInputs[i].RelY);
+        IniFile->WriteInteger(inputSection, "LineStyle", static_cast<int>(FInputs[i].LineStyle));
+    }
+    
+    // Сохраняем точки выхода
+    IniFile->WriteInteger(Section, "OutputCount", FOutputs.size());
+    for (int i = 0; i < FOutputs.size(); i++) {
+        String outputSection = Section + "_Output_" + IntToStr(i);
+        IniFile->WriteFloat(outputSection, "RelX", FOutputs[i].RelX);
+        IniFile->WriteFloat(outputSection, "RelY", FOutputs[i].RelY);
+        IniFile->WriteInteger(outputSection, "LineStyle", static_cast<int>(FOutputs[i].LineStyle));
+    }
+}
+
+void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
+    FName = IniFile->ReadString(Section, "Name", "");
+    FId = IniFile->ReadInteger(Section, "Id", 0);
+    
+    int x = IniFile->ReadInteger(Section, "X", 0);
+    int y = IniFile->ReadInteger(Section, "Y", 0);
+    int width = IniFile->ReadInteger(Section, "Width", 80);
+    int height = IniFile->ReadInteger(Section, "Height", 60);
+    
+    FBounds = TRect(x, y, x + width, y + height);
+    
+    int stateValue = IniFile->ReadInteger(Section, "CurrentState", 0);
+    FCurrentState = static_cast<TTernary>(stateValue);
+    
+    // Загружаем точки входа
+    int inputCount = IniFile->ReadInteger(Section, "InputCount", 0);
+    FInputs.clear();
+    for (int i = 0; i < inputCount; i++) {
+        String inputSection = Section + "_Input_" + IntToStr(i);
+        double relX = IniFile->ReadFloat(inputSection, "RelX", 0);
+        double relY = IniFile->ReadFloat(inputSection, "RelY", 0);
+        TLineStyle lineStyle = static_cast<TLineStyle>(IniFile->ReadInteger(inputSection, "LineStyle", 0));
+        
+        int absX = FBounds.Left + (int)(relX * FBounds.Width());
+        int absY = FBounds.Top + (int)(relY * FBounds.Height());
+        
+        FInputs.push_back(TConnectionPoint(this, absX, absY, TTernary::ZERO, true, lineStyle));
+        FInputs.back().RelX = relX;
+        FInputs.back().RelY = relY;
+    }
+    
+    // Загружаем точки выхода
+    int outputCount = IniFile->ReadInteger(Section, "OutputCount", 0);
+    FOutputs.clear();
+    for (int i = 0; i < outputCount; i++) {
+        String outputSection = Section + "_Output_" + IntToStr(i);
+        double relX = IniFile->ReadFloat(outputSection, "RelX", 0);
+        double relY = IniFile->ReadFloat(outputSection, "RelY", 0);
+        TLineStyle lineStyle = static_cast<TLineStyle>(IniFile->ReadInteger(outputSection, "LineStyle", 0));
+        
+        int absX = FBounds.Left + (int)(relX * FBounds.Width());
+        int absY = FBounds.Top + (int)(relY * FBounds.Height());
+        
+        FOutputs.push_back(TConnectionPoint(this, absX, absY, TTernary::ZERO, false, lineStyle));
+        FOutputs.back().RelX = relX;
+        FOutputs.back().RelY = relY;
+    }
+}
