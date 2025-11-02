@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>1899.12.30 00:00:00.000.311,=D:\TNNC\Setun IDE\3\ComponentLibrary.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.256,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project1PCH1.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.166,=D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\setun_tte.c</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.194,=D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\setun_tte.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.349,D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\File1.cpp=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.349,=D:\TNNC\Setun IDE\3\TernaryTypes.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.332,D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\EmulatorSetun1958PCH1.h=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project1PCH1.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.232,=D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\types_tte.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.287,=D:\TNNC\Setun IDE\3\CircuitElements.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.266,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\File1.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.579,D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\EmulatorSetun1958.cpp=D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\File1.cpp</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.776,D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\EmulatorSetun1958.cbproj=D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\EmulatorSetun1958.cbproj</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.355,D:\TNNC\Setun IDE\3\dll\EmulatorSetun1958\EmulatorSetun1958.cbproj=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project1.cbproj</Transaction>
+    <Transaction>2025.11.02 01:10:23.117,=D:\TNNC\Setun IDE\3\CircuitElement.cpp</Transaction>
+  </Transactions>
+</BorlandProject>
