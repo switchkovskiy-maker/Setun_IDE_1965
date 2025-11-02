@@ -149,22 +149,22 @@ void TSubCircuit::UpdateExternalConnections() {
 // Методы сериализации TSubCircuit
 void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
     TCircuitElement::SaveToIni(IniFile, Section);
-    
+
     // Сохраняем внутренние элементы
     IniFile->WriteInteger(Section, "InternalElementCount", static_cast<int>(FInternalElements.size()));
-    
+
     for (int i = 0; i < FInternalElements.size(); i++) {
         String internalSection = Section + "_Internal_" + IntToStr(i);
         MainForm->SaveElementToIni(FInternalElements[i].get(), IniFile, internalSection);
     }
-    
+
     // Сохраняем внутренние соединения
     IniFile->WriteInteger(Section, "InternalConnectionCount", static_cast<int>(FInternalConnections.size()));
-    
+
     for (int i = 0; i < FInternalConnections.size(); i++) {
         String connSection = Section + "_InternalConn_" + IntToStr(i);
         auto& conn = FInternalConnections[i];
-        
+
         if (conn.first && conn.second) {
             MainForm->SaveConnectionPoint(conn.first, IniFile, connSection, "From");
             MainForm->SaveConnectionPoint(conn.second, IniFile, connSection, "To");
@@ -173,43 +173,43 @@ void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
 }
 
 void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
-	TCircuitElement::LoadFromIni(IniFile, Section);
+    TCircuitElement::LoadFromIni(IniFile, Section);
 
     // Загружаем внутренние элементы
     int internalElementCount = IniFile->ReadInteger(Section, "InternalElementCount", 0);
-    
+
     for (int i = 0; i < internalElementCount; i++) {
         String internalSection = Section + "_Internal_" + IntToStr(i);
         auto element = MainForm->LoadElementFromIni(IniFile, internalSection);
-        
+
         if (element) {
             FInternalElements.push_back(std::move(element));
         }
     }
-    
+
     // Загружаем внутренние соединения
     int internalConnCount = IniFile->ReadInteger(Section, "InternalConnectionCount", 0);
-    
+
     for (int i = 0; i < internalConnCount; i++) {
         String connSection = Section + "_InternalConn_" + IntToStr(i);
-        
+
         TConnectionPoint* fromPoint = MainForm->LoadConnectionPoint(IniFile, connSection, "From", this);
         TConnectionPoint* toPoint = MainForm->LoadConnectionPoint(IniFile, connSection, "To", this);
-        
+
         if (fromPoint && toPoint) {
             // Находим реальные точки во внутренних элементах
             TConnectionPoint* realFromPoint = FindConnectionPointInInternalElements(fromPoint);
             TConnectionPoint* realToPoint = FindConnectionPointInInternalElements(toPoint);
-            
+
             if (realFromPoint && realToPoint) {
                 FInternalConnections.push_back(std::make_pair(realFromPoint, realToPoint));
             }
-            
+
             delete fromPoint;
             delete toPoint;
         }
     }
-    
+
     // Обновляем внешние соединения
     CreateExternalConnections();
 }
@@ -225,19 +225,19 @@ TCircuitElement* TSubCircuit::FindInternalElementById(int Id) {
 
 TConnectionPoint* TSubCircuit::FindConnectionPointInInternalElements(const TConnectionPoint* pointTemplate) {
     if (!pointTemplate || !pointTemplate->Owner) return nullptr;
-    
+
     TCircuitElement* element = FindInternalElementById(pointTemplate->Owner->Id);
     if (!element) return nullptr;
-    
+
     auto& points = pointTemplate->IsInput ? element->Inputs : element->Outputs;
-    
+
     for (auto& point : points) {
-        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 && 
+        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 &&
             fabs(point.RelY - pointTemplate->RelY) < 0.001) {
             return &point;
         }
     }
-    
+
     return nullptr;
 }
 
@@ -246,7 +246,7 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FIsSelecting(false),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
-    FScrollOffsetX(0), FScrollOffsetY(0), FStandardLibraryHandle(0) {
+    FScrollOffsetX(0), FScrollOffsetY(0) {
 
     // Включаем двойную буферизацию
     CircuitImage->ControlStyle = CircuitImage->ControlStyle << csOpaque;
@@ -398,6 +398,180 @@ void __fastcall TMainForm::FormKeyDown(TObject *Sender, WORD &Key, TShiftState S
     }
 }
 
+// ============================================================================
+// МЕТОДЫ АВТОМАТИЧЕСКОЙ ЗАГРУЗКИ DLL
+// ============================================================================
+
+void TMainForm::LoadAllLibraries() {
+    String currentDir = GetCurrentDir();
+    String searchPattern = currentDir + "\\*.dll";
+
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(searchPattern.w_str(), &findFileData);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        StatusBar->Panels->Items[0]->Text = "Не найдены DLL файлы в папке приложения";
+        return;
+    }
+
+    int loadedCount = 0;
+    int totalCount = 0;
+
+    do {
+        // Пропускаем папки
+        if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            continue;
+        }
+
+        String dllFileName = findFileData.cFileName;
+        String dllPath = currentDir + "\\" + dllFileName;
+
+        totalCount++;
+
+        // Пытаемся загрузить библиотеку
+        if (LoadLibraryFromDLL(dllPath)) {
+            loadedCount++;
+            StatusBar->Panels->Items[0]->Text = "Загружена библиотека: " + dllFileName;
+        }
+
+    } while (FindNextFile(hFind, &findFileData) != 0);
+
+    FindClose(hFind);
+
+    String resultMsg = "Загружено библиотек: " + IntToStr(loadedCount) + " из " + IntToStr(totalCount);
+    StatusBar->Panels->Items[0]->Text = resultMsg;
+
+    // Обновляем список библиотек в интерфейсе
+    UpdateLibrarySelector();
+}
+
+void TMainForm::UnloadAllLibraries() {
+    // Выгружаем библиотеки в обратном порядке (для корректности зависимостей)
+    for (auto it = FLoadedLibraries.rbegin(); it != FLoadedLibraries.rend(); ++it) {
+        TLoadedLibrary& lib = *it;
+
+        // Вызываем функцию выгрузки, если она есть
+        if (lib.UnregisterFunc) {
+            lib.UnregisterFunc(FLibraryManager.get());
+        }
+
+        // Выгружаем DLL
+        if (lib.Handle) {
+            FreeLibrary(lib.Handle);
+        }
+    }
+
+    FLoadedLibraries.clear();
+}
+
+bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
+    // Пропускаем системные и известные DLL, которые не должны быть загружены
+    String fileName = ExtractFileName(DllPath).LowerCase();
+    if (fileName == "vcl.dll" || fileName == "rtl.dll" ||
+        fileName.Pos("borland") > 0 || fileName.Pos("bpl") > 0) {
+        return false;
+    }
+
+    HINSTANCE libraryHandle = LoadLibrary(DllPath.w_str());
+
+    if (!libraryHandle) {
+        return false;
+    }
+
+    // Ищем функцию регистрации
+    TRegisterLibraryFunction registerFunc = FindRegisterFunction(libraryHandle);
+
+    if (!registerFunc) {
+        FreeLibrary(libraryHandle);
+        return false;
+    }
+
+    // Ищем функцию выгрузки
+    TUnregisterLibraryFunction unregisterFunc = FindUnregisterFunction(libraryHandle);
+
+    try {
+        // Регистрируем библиотеку
+        bool success = registerFunc(FLibraryManager.get());
+
+        if (!success) {
+            FreeLibrary(libraryHandle);
+            return false;
+        }
+
+        // Сохраняем информацию о библиотеке
+        TLoadedLibrary loadedLib;
+        loadedLib.Handle = libraryHandle;
+        loadedLib.FileName = ExtractFileName(DllPath);
+        loadedLib.UnregisterFunc = unregisterFunc;
+
+        // Получаем имя библиотеки (если доступно)
+        typedef const char* (__stdcall *TGetLibraryNameFunction)();
+        TGetLibraryNameFunction getNameFunc = reinterpret_cast<TGetLibraryNameFunction>(
+            GetProcAddress(libraryHandle, "GetLibraryName"));
+
+        if (getNameFunc) {
+            loadedLib.LibraryName = String(getNameFunc());
+        } else {
+            loadedLib.LibraryName = "Библиотека из " + loadedLib.FileName;
+        }
+
+        FLoadedLibraries.push_back(loadedLib);
+        return true;
+    }
+    catch (...) {
+        FreeLibrary(libraryHandle);
+        return false;
+    }
+}
+
+TRegisterLibraryFunction TMainForm::FindRegisterFunction(HINSTANCE LibraryHandle) {
+    // Список возможных имен функции регистрации (для совместимости)
+    const char* functionNames[] = {
+        "RegisterLibrary",           // Новый стандарт
+        "RegisterStandardLibrary",   // Старый стандарт
+        "_RegisterLibrary@4",        // Декорированное имя (x86)
+        "_RegisterStandardLibrary@4",
+        "RegisterLibrary@4",
+        "RegisterStandardLibrary@4"
+    };
+
+    for (const char* funcName : functionNames) {
+        TRegisterLibraryFunction func = reinterpret_cast<TRegisterLibraryFunction>(
+            GetProcAddress(LibraryHandle, funcName));
+        if (func) return func;
+    }
+
+    return nullptr;
+}
+
+TUnregisterLibraryFunction TMainForm::FindUnregisterFunction(HINSTANCE LibraryHandle) {
+    // Список возможных имен функции выгрузки
+    const char* functionNames[] = {
+        "UnregisterLibrary",
+        "UnregisterStandardLibrary",
+        "_UnregisterLibrary@4",
+        "_UnregisterStandardLibrary@4",
+        "UnregisterLibrary@4",
+        "UnregisterStandardLibrary@4"
+    };
+
+    for (const char* funcName : functionNames) {
+        TUnregisterLibraryFunction func = reinterpret_cast<TUnregisterLibraryFunction>(
+            GetProcAddress(LibraryHandle, funcName));
+        if (func) return func;
+    }
+
+    return nullptr;
+}
+
+
+
+
+
+
+
+
+
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
     // Инициализируем менеджер библиотек
     FLibraryManager = std::make_unique<TLibraryManager>();
@@ -405,14 +579,8 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     // Создаем встроенную базовую библиотеку
     CreateBasicLibrary();
 
-    // Загружаем стандартную библиотеку из DLL
-    if (!LoadStandardLibrary()) {
-        Application->MessageBox(
-            L"Не удалось загрузить стандартную библиотеку элементов из DLL.\nПриложение продолжит работу со встроенной библиотекой.",
-            L"Предупреждение",
-            MB_OK | MB_ICONWARNING
-        );
-    }
+    // Автоматически загружаем все DLL из папки приложения
+    LoadAllLibraries();
 
     CreateCompleteLibrary();
     CircuitImage->Align = alNone;
@@ -452,57 +620,6 @@ void TMainForm::CreateBasicLibrary() {
     FLibraryManager->RegisterLibrary(std::move(FBasicLibrary));
 }
 
-bool TMainForm::LoadStandardLibrary() {
-    String currentDir = GetCurrentDir();
-    String dllPath = currentDir + "\\StandardLibrary.dll";
-
-    if (!FileExists(dllPath)) {
-        return false;
-    }
-
-    FStandardLibraryHandle = LoadLibrary(dllPath.w_str());
-
-    if (!FStandardLibraryHandle) {
-        return false;
-    }
-
-    TRegisterLibraryFunction registerFunc = nullptr;
-
-    // Пробуем разные варианты имен функции
-    const char* functionNames[] = {
-        "RegisterStandardLibrary",
-        "_RegisterStandardLibrary@4",
-        "RegisterStandardLibrary@4"
-    };
-
-    for (const char* funcName : functionNames) {
-        registerFunc = reinterpret_cast<TRegisterLibraryFunction>(
-            GetProcAddress(FStandardLibraryHandle, funcName));
-        if (registerFunc) break;
-    }
-
-    if (!registerFunc) {
-        FreeLibrary(FStandardLibraryHandle);
-        FStandardLibraryHandle = 0;
-        return false;
-    }
-
-    try {
-        bool result = registerFunc(FLibraryManager.get());
-        if (!result) {
-            FreeLibrary(FStandardLibraryHandle);
-            FStandardLibraryHandle = 0;
-            return false;
-        }
-        return true;
-    }
-    catch (...) {
-        FreeLibrary(FStandardLibraryHandle);
-        FStandardLibraryHandle = 0;
-        return false;
-    }
-}
-
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
     // Сначала очищаем элементы и соединения
     FElements.clear();
@@ -512,27 +629,8 @@ void __fastcall TMainForm::FormDestroy(TObject *Sender) {
     // Затем освобождаем библиотеки
     FLibraryManager.reset();
 
-    // И только потом выгружаем DLL
-    UnloadStandardLibrary();
-}
-
-void TMainForm::UnloadStandardLibrary() {
-    if (FStandardLibraryHandle) {
-        // Даем время на завершение операций
-        Sleep(100);
-
-        // Пытаемся найти функцию выгрузки
-        TUnregisterLibraryFunction unregisterFunc =
-            reinterpret_cast<TUnregisterLibraryFunction>(
-                GetProcAddress(FStandardLibraryHandle, "UnregisterStandardLibrary"));
-
-        if (unregisterFunc) {
-            unregisterFunc(FLibraryManager.get());
-        }
-
-        FreeLibrary(FStandardLibraryHandle);
-        FStandardLibraryHandle = 0;
-    }
+    // И только потом выгружаем все DLL
+    UnloadAllLibraries();
 }
 
 // Новые методы для создания элементов через библиотеки
@@ -709,11 +807,11 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
 
     // Загружаем элементы
     std::map<int, TCircuitElement*> idToElementMap;
-    
+
     for (int i = 0; i < elementCount; i++) {
         String section = "Element_" + IntToStr(i);
         auto element = LoadElementFromIni(iniFile.get(), section);
-        
+
         if (element) {
             idToElementMap[element->Id] = element.get();
             FElements.push_back(std::move(element));
@@ -723,22 +821,22 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
     // Загружаем соединения
     for (int i = 0; i < connectionCount; i++) {
         String section = "Connection_" + IntToStr(i);
-        
+
         TConnectionPoint* fromPoint = LoadConnectionPoint(iniFile.get(), section, "From", nullptr);
         TConnectionPoint* toPoint = LoadConnectionPoint(iniFile.get(), section, "To", nullptr);
-        
+
         if (fromPoint && toPoint) {
             // Находим реальные точки соединения в загруженных элементах
             TCircuitElement* fromElement = idToElementMap[fromPoint->Owner->Id];
             TCircuitElement* toElement = idToElementMap[toPoint->Owner->Id];
-            
+
             TConnectionPoint* realFromPoint = FindConnectionPointInElement(fromElement, fromPoint);
             TConnectionPoint* realToPoint = FindConnectionPointInElement(toElement, toPoint);
-            
+
             if (realFromPoint && realToPoint) {
                 FConnections.push_back(std::make_pair(realFromPoint, realToPoint));
             }
-            
+
             delete fromPoint;
             delete toPoint;
         }
@@ -764,12 +862,12 @@ std::unique_ptr<TCircuitElement> TMainForm::LoadElementFromIni(TIniFile* IniFile
     int id = IniFile->ReadInteger(Section, "Id", 0);
     int x = IniFile->ReadInteger(Section, "X", 0);
     int y = IniFile->ReadInteger(Section, "Y", 0);
-    
+
     auto element = CreateElementByClassName(className, id, x, y);
     if (element) {
         element->LoadFromIni(IniFile, Section);
     }
-    
+
     return element;
 }
 
@@ -803,32 +901,32 @@ std::unique_ptr<TCircuitElement> TMainForm::CreateElementByClassName(const Strin
     } else if (ClassName == "TGenerator") {
         return std::make_unique<TGenerator>(Id, X, Y);
     } else if (ClassName == "TSubCircuit") {
-        return std::make_unique<TSubCircuit>(Id, X, Y, 
+        return std::make_unique<TSubCircuit>(Id, X, Y,
             std::vector<std::unique_ptr<TCircuitElement>>(),
             std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>());
     }
-    
+
     return nullptr;
 }
 
-void TMainForm::SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile, 
+void TMainForm::SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile,
                                    const String& Section, const String& Prefix) {
     if (!Point || !Point->Owner) return;
-    
+
     IniFile->WriteInteger(Section, Prefix + "ElementId", Point->Owner->Id);
     IniFile->WriteFloat(Section, Prefix + "RelX", Point->RelX);
     IniFile->WriteFloat(Section, Prefix + "RelY", Point->RelY);
     IniFile->WriteBool(Section, Prefix + "IsInput", Point->IsInput);
 }
 
-TConnectionPoint* TMainForm::LoadConnectionPoint(TIniFile* IniFile, const String& Section, 
+TConnectionPoint* TMainForm::LoadConnectionPoint(TIniFile* IniFile, const String& Section,
                                                 const String& Prefix, TCircuitElement* Owner) {
     int elementId = IniFile->ReadInteger(Section, Prefix + "ElementId", -1);
     if (elementId == -1) return nullptr;
-    
+
     // Создаем временный элемент-заглушку для точки соединения
     auto tempElement = std::make_unique<TTempCircuitElement>(elementId);
-    
+
     auto point = new TConnectionPoint(
         tempElement.get(),
         0, 0,
@@ -836,14 +934,14 @@ TConnectionPoint* TMainForm::LoadConnectionPoint(TIniFile* IniFile, const String
         IniFile->ReadBool(Section, Prefix + "IsInput", true),
         TLineStyle::POSITIVE_CONTROL
     );
-    
+
     point->RelX = IniFile->ReadFloat(Section, Prefix + "RelX", 0);
     point->RelY = IniFile->ReadFloat(Section, Prefix + "RelY", 0);
-    
+
     // Сохраняем временный элемент, чтобы избежать его уничтожения
     static std::vector<std::unique_ptr<TCircuitElement>> tempElements;
     tempElements.push_back(std::move(tempElement));
-    
+
     return point;
 }
 
@@ -851,16 +949,17 @@ TConnectionPoint* TMainForm::FindConnectionPointInElement(TCircuitElement* eleme
     if (!element) return nullptr;
 
     auto& points = pointTemplate->IsInput ? element->Inputs : element->Outputs;
-    
+
     for (auto& point : points) {
-        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 && 
+        if (fabs(point.RelX - pointTemplate->RelX) < 0.001 &&
             fabs(point.RelY - pointTemplate->RelY) < 0.001) {
             return &point;
         }
     }
-    
+
     return nullptr;
 }
+
 
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
     DeleteSelectedElements();

@@ -18,11 +18,21 @@
 #include <Vcl.Dialogs.hpp>
 #include <Vcl.Buttons.hpp>
 #include <windows.h>
+#include <vector>
+#include <map>
 
 // Тип функции для регистрации библиотеки в DLL
 typedef bool (__stdcall *TRegisterLibraryFunction)(TLibraryManager*);
 // Тип функции для отмены регистрации библиотеки в DLL
 typedef void (__stdcall *TUnregisterLibraryFunction)(TLibraryManager*);
+
+// Структура для хранения информации о загруженной библиотеке
+struct TLoadedLibrary {
+    HINSTANCE Handle;
+    String FileName;
+    String LibraryName;
+    TUnregisterLibraryFunction UnregisterFunc;
+};
 
 class TMainForm : public TForm {
 __published:
@@ -117,9 +127,11 @@ private:
     double FZoomFactor;
     int FScrollOffsetX;
     int FScrollOffsetY;
-    HINSTANCE FStandardLibraryHandle;
+
+    // Новые поля для управления библиотеками
     std::unique_ptr<TLibraryManager> FLibraryManager;
     std::unique_ptr<TComponentLibrary> FBasicLibrary;
+    std::vector<TLoadedLibrary> FLoadedLibraries; // Все загруженные DLL
 
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
@@ -140,8 +152,6 @@ private:
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
     void UpdateLibrarySelector();
     void LoadCurrentLibrary();
-    bool LoadStandardLibrary();
-    void UnloadStandardLibrary();
     void CreateBasicLibrary();
     TPoint ScreenToLogical(const TPoint& screenPoint) const;
     TPoint LogicalToScreen(const TPoint& logicalPoint) const;
@@ -165,10 +175,17 @@ private:
     TConnectionPoint* FindConnectionPointInElement(TCircuitElement* element, const TConnectionPoint* pointTemplate);
     std::unique_ptr<TCircuitElement> CreateElementByClassName(const String& ClassName, int Id, int X, int Y);
 
+    // Новые методы для автоматической загрузки DLL
+    void LoadAllLibraries();
+    void UnloadAllLibraries();
+    bool LoadLibraryFromDLL(const String& DllPath);
+    TRegisterLibraryFunction FindRegisterFunction(HINSTANCE LibraryHandle);
+    TUnregisterLibraryFunction FindUnregisterFunction(HINSTANCE LibraryHandle);
+
 protected:
     // Делаем методы доступными для TSubCircuit
     friend class TSubCircuit;
-    
+
 public:
     __fastcall TMainForm(TComponent* Owner);
 };
