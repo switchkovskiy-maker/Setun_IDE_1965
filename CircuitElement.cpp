@@ -284,11 +284,11 @@ void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const 
     IniFile->WriteInteger(Section, "Y", FBounds.Top);
     IniFile->WriteInteger(Section, "Width", FBounds.Width());
     IniFile->WriteInteger(Section, "Height", FBounds.Height());
-    
+
     // Сохраняем состояние
     int stateValue = static_cast<int>(FCurrentState);
     IniFile->WriteInteger(Section, "CurrentState", stateValue);
-    
+
     // Сохраняем точки входа
     IniFile->WriteInteger(Section, "InputCount", FInputs.size());
     for (int i = 0; i < FInputs.size(); i++) {
@@ -297,7 +297,7 @@ void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const 
         IniFile->WriteFloat(inputSection, "RelY", FInputs[i].RelY);
         IniFile->WriteInteger(inputSection, "LineStyle", static_cast<int>(FInputs[i].LineStyle));
     }
-    
+
     // Сохраняем точки выхода
     IniFile->WriteInteger(Section, "OutputCount", FOutputs.size());
     for (int i = 0; i < FOutputs.size(); i++) {
@@ -311,17 +311,17 @@ void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const 
 void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
     FName = IniFile->ReadString(Section, "Name", "");
     FId = IniFile->ReadInteger(Section, "Id", 0);
-    
+
     int x = IniFile->ReadInteger(Section, "X", 0);
     int y = IniFile->ReadInteger(Section, "Y", 0);
     int width = IniFile->ReadInteger(Section, "Width", 80);
     int height = IniFile->ReadInteger(Section, "Height", 60);
-    
+
     FBounds = TRect(x, y, x + width, y + height);
-    
+
     int stateValue = IniFile->ReadInteger(Section, "CurrentState", 0);
     FCurrentState = static_cast<TTernary>(stateValue);
-    
+
     // Загружаем точки входа
     int inputCount = IniFile->ReadInteger(Section, "InputCount", 0);
     FInputs.clear();
@@ -330,15 +330,15 @@ void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
         double relX = IniFile->ReadFloat(inputSection, "RelX", 0);
         double relY = IniFile->ReadFloat(inputSection, "RelY", 0);
         TLineStyle lineStyle = static_cast<TLineStyle>(IniFile->ReadInteger(inputSection, "LineStyle", 0));
-        
+
         int absX = FBounds.Left + (int)(relX * FBounds.Width());
         int absY = FBounds.Top + (int)(relY * FBounds.Height());
-        
+
         FInputs.push_back(TConnectionPoint(this, absX, absY, TTernary::ZERO, true, lineStyle));
         FInputs.back().RelX = relX;
         FInputs.back().RelY = relY;
     }
-    
+
     // Загружаем точки выхода
     int outputCount = IniFile->ReadInteger(Section, "OutputCount", 0);
     FOutputs.clear();
@@ -347,10 +347,10 @@ void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
         double relX = IniFile->ReadFloat(outputSection, "RelX", 0);
         double relY = IniFile->ReadFloat(outputSection, "RelY", 0);
         TLineStyle lineStyle = static_cast<TLineStyle>(IniFile->ReadInteger(outputSection, "LineStyle", 0));
-        
+
         int absX = FBounds.Left + (int)(relX * FBounds.Width());
         int absY = FBounds.Top + (int)(relY * FBounds.Height());
-        
+
         FOutputs.push_back(TConnectionPoint(this, absX, absY, TTernary::ZERO, false, lineStyle));
         FOutputs.back().RelX = relX;
         FOutputs.back().RelY = relY;

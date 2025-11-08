@@ -28,7 +28,7 @@ public:
 TSubCircuit::TSubCircuit(int AId, int X, int Y,
                         std::vector<std::unique_ptr<TCircuitElement>>&& Elements,
                         const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& Connections)
-    : TCircuitElement(AId, "SubCircuit", X, Y) {
+    : TCircuitElement(AId, "SubCircuit", X, Y), FAssociatedTab(nullptr) {
 
     FBounds = TRect(X, Y, X + 120, Y + 80);
     FInternalElements = std::move(Elements);
@@ -246,17 +246,21 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FIsSelecting(false),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
-    FScrollOffsetX(0), FScrollOffsetY(0) {
+    FScrollOffsetX(0), FScrollOffsetY(0), FSimulationRunning(false), FSimulationStep(0) {
 
     // Включаем двойную буферизацию
-    CircuitImage->ControlStyle = CircuitImage->ControlStyle << csOpaque;
     DoubleBuffered = true;
 
     // Инициализируем скроллбары
-    Workspace->HorzScrollBar->Tracking = true;
-    Workspace->VertScrollBar->Tracking = true;
+    WorkspacePanel->DoubleBuffered = true;
 
     KeyPreview = true;
+
+    // Инициализируем таймер симуляции
+    FSimulationTimer = new TTimer(this);
+    FSimulationTimer->Interval = 500; // 0.5 секунды
+    FSimulationTimer->OnTimer = &SimulationTimerTimer;
+    FSimulationTimer->Enabled = false;
 }
 
 // Новые методы для преобразования координат
@@ -283,11 +287,14 @@ TRect TMainForm::LogicalToScreen(const TRect& logicalRect) const {
 
 // Новые методы для размещения элементов
 TPoint TMainForm::GetVisibleAreaCenter() const {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return TPoint(400, 300);
+
     // Получаем видимую область в логических координатах
-    int logicalLeft = Workspace->HorzScrollBar->Position / FZoomFactor;
-    int logicalTop = Workspace->VertScrollBar->Position / FZoomFactor;
-    int logicalRight = (Workspace->HorzScrollBar->Position + Workspace->ClientWidth) / FZoomFactor;
-    int logicalBottom = (Workspace->VertScrollBar->Position + Workspace->ClientHeight) / FZoomFactor;
+    int logicalLeft = currentTab->ScrollBox->HorzScrollBar->Position / FZoomFactor;
+    int logicalTop = currentTab->ScrollBox->VertScrollBar->Position / FZoomFactor;
+    int logicalRight = (currentTab->ScrollBox->HorzScrollBar->Position + currentTab->ScrollBox->ClientWidth) / FZoomFactor;
+    int logicalBottom = (currentTab->ScrollBox->VertScrollBar->Position + currentTab->ScrollBox->ClientHeight) / FZoomFactor;
 
     return TPoint(
         (logicalLeft + logicalRight) / 2,
@@ -296,6 +303,9 @@ TPoint TMainForm::GetVisibleAreaCenter() const {
 }
 
 bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return false;
+
     int originalX = x;
     int originalY = y;
     int step = 40; // шаг смещения в логических пикселях
@@ -305,7 +315,7 @@ bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
         bool collision = false;
 
         // Проверяем пересечение с существующими элементами
-        for (const auto& element : FElements) {
+        for (const auto& element : currentTab->Elements) {
             if (newRect.IntersectsWith(element->Bounds)) {
                 collision = true;
                 break;
@@ -348,13 +358,14 @@ TPoint TMainForm::GetBestPlacementPosition(int width, int height) {
 
 // Метод для удаления выделенных элементов
 void TMainForm::DeleteSelectedElements() {
-    if (FSelectedElements.empty()) return;
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || FSelectedElements.empty()) return;
 
     std::vector<TCircuitElement*> elementsToDelete = FSelectedElements;
 
     // Удаляем соединения, связанные с выделенными элементами
-    auto it = FConnections.begin();
-    while (it != FConnections.end()) {
+    auto it = currentTab->Connections.begin();
+    while (it != currentTab->Connections.end()) {
         bool shouldRemove = false;
         for (auto* element : elementsToDelete) {
             if ((it->first->Owner == element) || (it->second->Owner == element)) {
@@ -363,7 +374,7 @@ void TMainForm::DeleteSelectedElements() {
             }
         }
         if (shouldRemove) {
-            it = FConnections.erase(it);
+            it = currentTab->Connections.erase(it);
         } else {
             ++it;
         }
@@ -371,13 +382,13 @@ void TMainForm::DeleteSelectedElements() {
 
     // Удаляем элементы из вектора
     for (auto* elementToDelete : elementsToDelete) {
-        auto elemIt = std::find_if(FElements.begin(), FElements.end(),
+        auto elemIt = std::find_if(currentTab->Elements.begin(), currentTab->Elements.end(),
             [elementToDelete](const std::unique_ptr<TCircuitElement>& elem) {
                 return elem.get() == elementToDelete;
             });
 
-        if (elemIt != FElements.end()) {
-            FElements.erase(elemIt);
+        if (elemIt != currentTab->Elements.end()) {
+            currentTab->Elements.erase(elemIt);
         }
     }
 
@@ -386,7 +397,10 @@ void TMainForm::DeleteSelectedElements() {
     FSelectedElement = nullptr;
 
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    // Перерисовываем текущую вкладку
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
     StatusBar->Panels->Items[0]->Text = "Удалено элементов: " + IntToStr(static_cast<int>(elementsToDelete.size()));
 }
 
@@ -564,14 +578,6 @@ TUnregisterLibraryFunction TMainForm::FindUnregisterFunction(HINSTANCE LibraryHa
     return nullptr;
 }
 
-
-
-
-
-
-
-
-
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
     // Инициализируем менеджер библиотек
     FLibraryManager = std::make_unique<TLibraryManager>();
@@ -583,10 +589,10 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     LoadAllLibraries();
 
     CreateCompleteLibrary();
-    CircuitImage->Align = alNone;
-    CircuitImage->Cursor = crCross;
-    UpdatePaintBoxSize();
-    CenterCircuit();
+
+    // Создаем основную вкладку
+    TTabSheet* mainTab = CreateNewTab("Основная схема");
+    SchemePageControl->ActivePage = mainTab;
 
     btnConnectionMode->AllowAllUp = true;
     btnConnectionMode->GroupIndex = 1;
@@ -621,6 +627,9 @@ void TMainForm::CreateBasicLibrary() {
 }
 
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
+    // Останавливаем симуляцию
+    FSimulationTimer->Enabled = false;
+
     // Сначала очищаем элементы и соединения
     FElements.clear();
     FConnections.clear();
@@ -637,7 +646,7 @@ void __fastcall TMainForm::FormDestroy(TObject *Sender) {
 std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryName, const String& ElementName, int X, int Y) {
     try {
         if (!FLibraryManager) {
-            throw Exception("Менеджер библиотек не инициализирован");
+            throw Exception("Менеджер библиотеков не инициализирован");
         }
 
         auto element = FLibraryManager->CreateElement(LibraryName, ElementName, FNextElementId, X, Y);
@@ -660,7 +669,7 @@ std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryN
 std::unique_ptr<TCircuitElement> TMainForm::CreateElementFromCurrent(const String& ElementName, int X, int Y) {
     try {
         if (!FLibraryManager) {
-            throw Exception("Менеджер библиотек не инициализирован");
+            throw Exception("Менеджер библиотеков не инициализирован");
         }
 
         if (!FLibraryManager->GetCurrentLibrary()) {
@@ -753,32 +762,42 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
     newElement->SetBounds(TRect(bestPos.X, bestPos.Y, bestPos.X + width, bestPos.Y + height));
     newElement->CalculateRelativePositions();
 
-    FElements.push_back(std::move(newElement));
-    UpdatePaintBoxSize();
-    CircuitImage->Repaint();
-    StatusBar->Panels->Items[0]->Text = "Добавлен: " + elementName;
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab) {
+        currentTab->Elements.push_back(std::move(newElement));
+        UpdatePaintBoxSize();
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
+        StatusBar->Panels->Items[0]->Text = "Добавлен: " + elementName;
+    }
 }
 
 // Новая реализация сериализации для сохранения схемы
-void TMainForm::SaveSchemeToFile(const String& FileName) {
+void TMainForm::SaveSchemeToFile(const String& FileName, TTabData* TabData) {
+    if (!TabData) {
+        TabData = GetCurrentTabData();
+        if (!TabData) return;
+    }
+
     std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
 
     // Сохраняем основную информацию
-    iniFile->WriteInteger("Scheme", "ElementCount", static_cast<int>(FElements.size()));
-    iniFile->WriteInteger("Scheme", "ConnectionCount", static_cast<int>(FConnections.size()));
-    iniFile->WriteInteger("Scheme", "NextElementId", FNextElementId);
+    iniFile->WriteInteger("Scheme", "ElementCount", static_cast<int>(TabData->Elements.size()));
+    iniFile->WriteInteger("Scheme", "ConnectionCount", static_cast<int>(TabData->Connections.size()));
+    iniFile->WriteInteger("Scheme", "NextElementId", TabData->NextElementId);
     iniFile->WriteString("Scheme", "Version", "3.0");
 
     // Сохраняем элементы
-    for (int i = 0; i < FElements.size(); i++) {
+    for (int i = 0; i < TabData->Elements.size(); i++) {
         String section = "Element_" + IntToStr(i);
-        SaveElementToIni(FElements[i].get(), iniFile.get(), section);
+        SaveElementToIni(TabData->Elements[i].get(), iniFile.get(), section);
     }
 
     // Сохраняем соединения
-    for (int i = 0; i < FConnections.size(); i++) {
+    for (int i = 0; i < TabData->Connections.size(); i++) {
         String section = "Connection_" + IntToStr(i);
-        auto& connection = FConnections[i];
+        auto& connection = TabData->Connections[i];
 
         if (connection.first && connection.second) {
             SaveConnectionPoint(connection.first, iniFile.get(), section, "From");
@@ -790,7 +809,12 @@ void TMainForm::SaveSchemeToFile(const String& FileName) {
 }
 
 // Новая реализация загрузки схемы
-void TMainForm::LoadSchemeFromFile(const String& FileName) {
+void TMainForm::LoadSchemeFromFile(const String& FileName, TTabData* TabData) {
+    if (!TabData) {
+        TabData = GetCurrentTabData();
+        if (!TabData) return;
+    }
+
     std::unique_ptr<TIniFile> iniFile(new TIniFile(FileName));
 
     String version = iniFile->ReadString("Scheme", "Version", "1.0");
@@ -803,7 +827,7 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
 
     int elementCount = iniFile->ReadInteger("Scheme", "ElementCount", 0);
     int connectionCount = iniFile->ReadInteger("Scheme", "ConnectionCount", 0);
-    FNextElementId = iniFile->ReadInteger("Scheme", "NextElementId", 1);
+    TabData->NextElementId = iniFile->ReadInteger("Scheme", "NextElementId", 1);
 
     // Загружаем элементы
     std::map<int, TCircuitElement*> idToElementMap;
@@ -814,7 +838,7 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
 
         if (element) {
             idToElementMap[element->Id] = element.get();
-            FElements.push_back(std::move(element));
+            TabData->Elements.push_back(std::move(element));
         }
     }
 
@@ -834,7 +858,7 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
             TConnectionPoint* realToPoint = FindConnectionPointInElement(toElement, toPoint);
 
             if (realFromPoint && realToPoint) {
-                FConnections.push_back(std::make_pair(realFromPoint, realToPoint));
+                TabData->Connections.push_back(std::make_pair(realFromPoint, realToPoint));
             }
 
             delete fromPoint;
@@ -844,7 +868,9 @@ void TMainForm::LoadSchemeFromFile(const String& FileName) {
 
     UpdatePaintBoxSize();
     CenterCircuit();
-    CircuitImage->Repaint();
+    if (TabData->PaintBox) {
+        TabData->PaintBox->Repaint();
+    }
 
     StatusBar->Panels->Items[0]->Text = "Схема загружена: " + FileName +
                                        " (элементов: " + IntToStr(elementCount) + ")";
@@ -960,27 +986,33 @@ TConnectionPoint* TMainForm::FindConnectionPointInElement(TCircuitElement* eleme
     return nullptr;
 }
 
-
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
     DeleteSelectedElements();
 }
 
 void __fastcall TMainForm::btnClearWorkspaceClick(TObject *Sender) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
+
     if (Application->MessageBox(L"Очистить всю рабочую область?", L"Подтверждение",
                                MB_YESNO | MB_ICONQUESTION) == ID_YES) {
-        FElements.clear();
-        FConnections.clear();
+        currentTab->Elements.clear();
+        currentTab->Connections.clear();
         FSelectedElements.clear();
         FSelectedElement = nullptr;
-        FNextElementId = 1;
+        currentTab->NextElementId = 1;
 
         UpdatePaintBoxSize();
 
         // Сбрасываем скролл в начало после очистки
-        Workspace->HorzScrollBar->Position = 0;
-        Workspace->VertScrollBar->Position = 0;
+        if (currentTab->ScrollBox) {
+            currentTab->ScrollBox->HorzScrollBar->Position = 0;
+            currentTab->ScrollBox->VertScrollBar->Position = 0;
+        }
 
-        CircuitImage->Repaint();
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
         StatusBar->Panels->Items[0]->Text = "Рабочая область очищена.";
     }
 }
@@ -990,27 +1022,33 @@ void __fastcall TMainForm::CircuitImagePaint(TObject *Sender) {
 }
 
 void TMainForm::DrawCircuit() {
-    OptimizedDrawCircuit(CircuitImage->Canvas);
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->PaintBox) return;
+
+    OptimizedDrawCircuit(currentTab->PaintBox->Canvas, currentTab);
 }
 
-void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - добавлен второй параметр
+void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData) {
+    if (!TabData) return;
+
     // Используем статический буфер для уменьшения создания/удаления объектов
     static std::unique_ptr<TBitmap> buffer;
     static int lastWidth = 0, lastHeight = 0;
 
-    if (!buffer || lastWidth != CircuitImage->Width || lastHeight != CircuitImage->Height) {
+    if (!buffer || lastWidth != TabData->PaintBox->Width || lastHeight != TabData->PaintBox->Height) {
         buffer = std::make_unique<TBitmap>();
-        buffer->Width = CircuitImage->Width;
-        buffer->Height = CircuitImage->Height;
-        lastWidth = CircuitImage->Width;
-        lastHeight = CircuitImage->Height;
+        buffer->Width = TabData->PaintBox->Width;
+        buffer->Height = TabData->PaintBox->Height;
+        lastWidth = TabData->PaintBox->Width;
+        lastHeight = TabData->PaintBox->Height;
     }
 
     TCanvas* canvas = buffer->Canvas;
 
     // Очистка фона
     canvas->Brush->Color = clWhite;
-    canvas->FillRect(CircuitImage->ClientRect);
+    canvas->FillRect(TabData->PaintBox->ClientRect);
 
     // Статическая переменная для отслеживания изменения масштаба
     static double lastZoomFactor = 0;
@@ -1021,13 +1059,13 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         canvas->Pen->Style = psDot;
         int gridSize = static_cast<int>(20 * FZoomFactor);
         if (gridSize > 2) {
-            for (int x = 0; x < CircuitImage->Width; x += gridSize) {
+            for (int x = 0; x < TabData->PaintBox->Width; x += gridSize) {
                 canvas->MoveTo(x, 0);
-                canvas->LineTo(x, CircuitImage->Height);
+                canvas->LineTo(x, TabData->PaintBox->Height);
             }
-            for (int y = 0; y < CircuitImage->Height; y += gridSize) {
+            for (int y = 0; y < TabData->PaintBox->Height; y += gridSize) {
                 canvas->MoveTo(0, y);
-                canvas->LineTo(CircuitImage->Width, y);
+                canvas->LineTo(TabData->PaintBox->Width, y);
             }
         }
         canvas->Pen->Style = psSolid;
@@ -1036,7 +1074,7 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
 
     // Соединения
     canvas->Pen->Width = static_cast<int>(2 * FZoomFactor);
-    for (auto& connection : FConnections) {
+    for (auto& connection : TabData->Connections) {
         TConnectionPoint* start = connection.first;
         TConnectionPoint* end = connection.second;
 
@@ -1046,8 +1084,10 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         TPoint screenEnd = LogicalToScreen(TPoint(end->X, end->Y));
 
         // Учитываем смещение скролла
-        screenStart.Offset(-Workspace->HorzScrollBar->Position, -Workspace->VertScrollBar->Position);
-        screenEnd.Offset(-Workspace->HorzScrollBar->Position, -Workspace->VertScrollBar->Position);
+        if (TabData->ScrollBox) {
+            screenStart.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+            screenEnd.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+        }
 
         canvas->MoveTo(screenStart.X, screenStart.Y);
         canvas->LineTo(screenEnd.X, screenEnd.Y);
@@ -1072,13 +1112,15 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
     canvas->Pen->Width = 1;
 
     // Элементы - рисуем в логических координатах с учетом масштаба и смещения
-    for (auto& element : FElements) {
+    for (auto& element : TabData->Elements) {
         // Сохраняем оригинальные bounds
         TRect originalBounds = element->Bounds;
 
         // Создаем временные bounds с учетом масштаба и смещения
         TRect screenBounds = LogicalToScreen(originalBounds);
-        screenBounds.Offset(-Workspace->HorzScrollBar->Position, -Workspace->VertScrollBar->Position);
+        if (TabData->ScrollBox) {
+            screenBounds.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+        }
 
         // Временно устанавливаем экранные bounds для отрисовки
         element->SetBounds(screenBounds);
@@ -1097,7 +1139,9 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         canvas->Pen->Style = psDash;
         canvas->Brush->Style = bsClear;
         TRect screenBounds = LogicalToScreen(selectedElement->Bounds);
-        screenBounds.Offset(-Workspace->HorzScrollBar->Position, -Workspace->VertScrollBar->Position);
+        if (TabData->ScrollBox) {
+            screenBounds.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+        }
         canvas->Rectangle(screenBounds);
         canvas->Pen->Style = psSolid;
         canvas->Pen->Width = 1;
@@ -1119,9 +1163,11 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas) {
         canvas->Pen->Color = clBlue;
         canvas->Pen->Style = psDash;
         TPoint screenStart = LogicalToScreen(TPoint(FConnectionStart->X, FConnectionStart->Y));
-        screenStart.Offset(-Workspace->HorzScrollBar->Position, -Workspace->VertScrollBar->Position);
+        if (TabData->ScrollBox) {
+            screenStart.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+        }
         canvas->MoveTo(screenStart.X, screenStart.Y);
-        TPoint mousePos = CircuitImage->ScreenToClient(Mouse->CursorPos);
+        TPoint mousePos = TabData->PaintBox->ScreenToClient(Mouse->CursorPos);
         canvas->LineTo(mousePos.X, mousePos.Y);
         canvas->Pen->Style = psSolid;
     }
@@ -1139,8 +1185,12 @@ TColor TMainForm::TernaryToColor(TTernary Value) {
     }
 }
 
+// ИСПРАВЛЕННАЯ СИГНАТУРА - добавлен const для MousePos
 void __fastcall TMainForm::WorkspaceMouseWheel(TObject *Sender, TShiftState Shift,
-    int WheelDelta, TPoint &MousePos, bool &Handled) {
+    int WheelDelta, const TPoint &MousePos, bool &Handled) {
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return;
 
     if (Shift.Contains(ssCtrl)) {
         Handled = true;
@@ -1154,25 +1204,30 @@ void __fastcall TMainForm::WorkspaceMouseWheel(TObject *Sender, TShiftState Shif
         Handled = true;
         int scrollAmount = WheelDelta > 0 ? -30 : 30;
 
-        Workspace->VertScrollBar->Position = Workspace->VertScrollBar->Position + scrollAmount;
-        Workspace->HorzScrollBar->Position = Workspace->HorzScrollBar->Position + scrollAmount;
+        currentTab->ScrollBox->VertScrollBar->Position = currentTab->ScrollBox->VertScrollBar->Position + scrollAmount;
+        currentTab->ScrollBox->HorzScrollBar->Position = currentTab->ScrollBox->HorzScrollBar->Position + scrollAmount;
 
-        CircuitImage->Repaint();
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
     }
 }
 
 void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton Button,
     TShiftState Shift, int X, int Y) {
 
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return;
+
     // Преобразуем экранные координаты в логические
     TPoint logicalPos = ScreenToLogical(TPoint(
-        X + Workspace->HorzScrollBar->Position,
-        Y + Workspace->VertScrollBar->Position
+        X + currentTab->ScrollBox->HorzScrollBar->Position,
+        Y + currentTab->ScrollBox->VertScrollBar->Position
     ));
 
     if (Button == mbLeft) {
         // ПЕРВОЕ: проверяем клик на точку соединения ВНЕ зависимости от текущего режима
-        for (auto& element : FElements) {
+        for (auto& element : currentTab->Elements) {
             TConnectionPoint* conn = element->GetConnectionAt(logicalPos.X, logicalPos.Y);
             if (conn) {
                 if (!FIsConnecting) {
@@ -1186,13 +1241,15 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                     } else {
                         StatusBar->Panels->Items[0]->Text = "Ошибка: первая точка должна быть выходом (синяя)";
                     }
-                    CircuitImage->Repaint();
+                    if (currentTab->PaintBox) {
+                        currentTab->PaintBox->Repaint();
+                    }
                     return;
                 } else {
                     // Завершение существующего соединения
                     if (conn->IsInput && FConnectionStart && FConnectionStart->Owner != conn->Owner) {
                         bool connectionExists = false;
-                        for (auto& existingConn : FConnections) {
+                        for (auto& existingConn : currentTab->Connections) {
                             if (existingConn.first == FConnectionStart && existingConn.second == conn) {
                                 connectionExists = true;
                                 break;
@@ -1200,7 +1257,7 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                         }
 
                         if (!connectionExists) {
-                            FConnections.push_back(std::make_pair(FConnectionStart, conn));
+                            currentTab->Connections.push_back(std::make_pair(FConnectionStart, conn));
                             StatusBar->Panels->Items[0]->Text = "Соединение создано.";
                         } else {
                             StatusBar->Panels->Items[0]->Text = "Соединение уже существует.";
@@ -1211,7 +1268,9 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
                     FIsConnecting = false;
                     FConnectionStart = nullptr;
                     btnConnectionMode->Down = false;
-                    CircuitImage->Repaint();
+                    if (currentTab->PaintBox) {
+                        currentTab->PaintBox->Repaint();
+                    }
                 }
                 return;
             }
@@ -1223,7 +1282,9 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
             FConnectionStart = nullptr;
             btnConnectionMode->Down = false;
             StatusBar->Panels->Items[0]->Text = "Режим соединения отменен.";
-            CircuitImage->Repaint();
+            if (currentTab->PaintBox) {
+                currentTab->PaintBox->Repaint();
+            }
             return;
         }
 
@@ -1237,7 +1298,7 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 
         bool elementFound = false;
 
-        for (auto& element : FElements) {
+        for (auto& element : currentTab->Elements) {
             TRect bounds = element->Bounds;
             TRect expandedBounds = TRect(
                 bounds.Left - 5, bounds.Top - 5,
@@ -1277,16 +1338,18 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
             StatusBar->Panels->Items[0]->Text = "Выбрано элементов: " + IntToStr(static_cast<int>(FSelectedElements.size()));
         }
 
-        CircuitImage->Repaint();
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
     } else if (Button == mbRight) {
         FSelectedElement = nullptr;
-        for (auto& element : FElements) {
+        for (auto& element : currentTab->Elements) {
             TRect bounds = element->Bounds;
             if (logicalPos.X >= bounds.Left && logicalPos.X <= bounds.Right &&
                 logicalPos.Y >= bounds.Top && logicalPos.Y <= bounds.Bottom) {
                 FSelectedElement = element.get();
 
-                TPoint popupPos = CircuitImage->ClientToScreen(TPoint(X, Y));
+                TPoint popupPos = currentTab->PaintBox->ClientToScreen(TPoint(X, Y));
                 ElementPopupMenu->Popup(popupPos.X, popupPos.Y);
                 break;
             }
@@ -1295,9 +1358,12 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 }
 
 void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Shift, int X, int Y) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return;
+
     TPoint logicalPos = ScreenToLogical(TPoint(
-        X + Workspace->HorzScrollBar->Position,
-        Y + Workspace->VertScrollBar->Position
+        X + currentTab->ScrollBox->HorzScrollBar->Position,
+        Y + currentTab->ScrollBox->VertScrollBar->Position
     ));
 
     // Оптимизация: обновляем только при значительном перемещении
@@ -1316,7 +1382,9 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
             );
 
             FDraggedElement->SetBounds(newBounds);
-            CircuitImage->Repaint();
+            if (currentTab->PaintBox) {
+                currentTab->PaintBox->Repaint();
+            }
 
             lastX = logicalPos.X;
             lastY = logicalPos.Y;
@@ -1325,26 +1393,36 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
     else if (FIsSelecting) {
         FSelectionRect.Right = X;
         FSelectionRect.Bottom = Y;
-        CircuitImage->Repaint();
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
     }
 
     // Обновление курсора
     if (btnConnectionMode->Down || FIsConnecting) {
         bool overConnection = false;
-        for (auto& element : FElements) {
+        for (auto& element : currentTab->Elements) {
             if (element->GetConnectionAt(logicalPos.X, logicalPos.Y)) {
                 overConnection = true;
                 break;
             }
         }
-        CircuitImage->Cursor = overConnection ? crHandPoint : crCross;
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Cursor = overConnection ? crHandPoint : crCross;
+        }
     } else {
-        CircuitImage->Cursor = crDefault;
+        if (currentTab->PaintBox) {
+            currentTab->PaintBox->Cursor = crDefault;
+        }
     }
 }
 
 void __fastcall TMainForm::CircuitImageMouseUp(TObject *Sender, TMouseButton Button,
     TShiftState Shift, int X, int Y) {
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return;
+
     if (Button == mbLeft) {
         if (FIsSelecting) {
             FIsSelecting = false;
@@ -1359,16 +1437,16 @@ void __fastcall TMainForm::CircuitImageMouseUp(TObject *Sender, TMouseButton But
 
             // Преобразуем экранный прямоугольник в логические координаты
             TPoint logicalTopLeft = ScreenToLogical(TPoint(
-                normalizedRect.Left + Workspace->HorzScrollBar->Position,
-                normalizedRect.Top + Workspace->VertScrollBar->Position
+                normalizedRect.Left + currentTab->ScrollBox->HorzScrollBar->Position,
+                normalizedRect.Top + currentTab->ScrollBox->VertScrollBar->Position
             ));
             TPoint logicalBottomRight = ScreenToLogical(TPoint(
-                normalizedRect.Right + Workspace->HorzScrollBar->Position,
-                normalizedRect.Bottom + Workspace->VertScrollBar->Position
+                normalizedRect.Right + currentTab->ScrollBox->HorzScrollBar->Position,
+                normalizedRect.Bottom + currentTab->ScrollBox->VertScrollBar->Position
             ));
             TRect logicalSelectionRect(logicalTopLeft, logicalBottomRight);
 
-            for (auto& element : FElements) {
+            for (auto& element : currentTab->Elements) {
                 TRect bounds = element->Bounds;
                 if (bounds.Left <= logicalSelectionRect.Right && bounds.Right >= logicalSelectionRect.Left &&
                     bounds.Top <= logicalSelectionRect.Bottom && bounds.Bottom >= logicalSelectionRect.Top) {
@@ -1385,7 +1463,9 @@ void __fastcall TMainForm::CircuitImageMouseUp(TObject *Sender, TMouseButton But
             }
 
             StatusBar->Panels->Items[0]->Text = "Выделено элементов: " + IntToStr(static_cast<int>(FSelectedElements.size()));
-            CircuitImage->Repaint();
+            if (currentTab->PaintBox) {
+                currentTab->PaintBox->Repaint();
+            }
         } else {
             FIsDragging = false;
             FDraggedElement = nullptr;
@@ -1394,31 +1474,68 @@ void __fastcall TMainForm::CircuitImageMouseUp(TObject *Sender, TMouseButton But
 }
 
 void __fastcall TMainForm::btnRunSimulationClick(TObject *Sender) {
-    RunSimulationStep();
-    CircuitImage->Repaint();
-    StatusBar->Panels->Items[0]->Text = "Симуляция выполнена.";
+    if (!FSimulationRunning) {
+        FSimulationRunning = true;
+        FSimulationTimer->Enabled = true;
+        btnRunSimulation->Caption = "Стоп";
+        StatusBar->Panels->Items[0]->Text = "Симуляция запущена";
+    } else {
+        FSimulationRunning = false;
+        FSimulationTimer->Enabled = false;
+        btnRunSimulation->Caption = "Симуляция";
+        StatusBar->Panels->Items[0]->Text = "Симуляция остановлена. Шагов: " + IntToStr(FSimulationStep);
+    }
 }
 
 void TMainForm::RunSimulationStep() {
-    for (auto& connection : FConnections) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
+
+    for (auto& connection : currentTab->Connections) {
         if (connection.first && connection.second) {
             connection.second->Value = connection.first->Value;
         }
     }
 
-    for (auto& element : FElements) {
+    for (auto& element : currentTab->Elements) {
         element->Calculate();
+    }
+
+    FSimulationStep++;
+
+    // Перерисовываем текущую вкладку
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
     }
 }
 
+void __fastcall TMainForm::SimulationTimerTimer(TObject* Sender) {
+    RunSimulationStep();
+
+    // Визуальная индикация работы симуляции
+    StatusBar->Panels->Items[0]->Text =
+        "Симуляция выполняется... Шаг: " + IntToStr(FSimulationStep);
+}
+
 void __fastcall TMainForm::btnResetSimulationClick(TObject *Sender) {
+    FSimulationRunning = false;
+    FSimulationTimer->Enabled = false;
+    FSimulationStep = 0;
+    btnRunSimulation->Caption = "Симуляция";
     ResetSimulation();
-    CircuitImage->Repaint();
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
     StatusBar->Panels->Items[0]->Text = "Симуляция сброшена.";
 }
 
 void TMainForm::ResetSimulation() {
-    for (auto& element : FElements) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
+
+    for (auto& element : currentTab->Elements) {
         TTernaryTrigger* trigger = dynamic_cast<TTernaryTrigger*>(element.get());
         if (trigger) {
             trigger->Reset();
@@ -1437,7 +1554,7 @@ void TMainForm::ResetSimulation() {
         }
     }
 
-    for (auto& connection : FConnections) {
+    for (auto& connection : currentTab->Connections) {
         if (connection.first) connection.first->Value = TTernary::ZERO;
         if (connection.second) connection.second->Value = TTernary::ZERO;
     }
@@ -1446,10 +1563,16 @@ void TMainForm::ResetSimulation() {
 void __fastcall TMainForm::btnConnectionModeClick(TObject *Sender) {
     if (btnConnectionMode->Down) {
         StatusBar->Panels->Items[0]->Text = "Режим соединения: выбирайте точки для соединения элементов.";
-        CircuitImage->Cursor = crCross;
+        TTabData* currentTab = GetCurrentTabData();
+        if (currentTab && currentTab->PaintBox) {
+            currentTab->PaintBox->Cursor = crCross;
+        }
     } else {
         StatusBar->Panels->Items[0]->Text = "Режим выбора: выбирайте и перемещайте элементы.";
-        CircuitImage->Cursor = crDefault;
+        TTabData* currentTab = GetCurrentTabData();
+        if (currentTab && currentTab->PaintBox) {
+            currentTab->PaintBox->Cursor = crDefault;
+        }
         FIsConnecting = false;
         FConnectionStart = nullptr;
     }
@@ -1494,7 +1617,10 @@ void __fastcall TMainForm::miRotateElementClick(TObject *Sender) {
 
         FSelectedElement->SetBounds(newBounds);
         UpdatePaintBoxSize();
-        CircuitImage->Repaint();
+        TTabData* currentTab = GetCurrentTabData();
+        if (currentTab && currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
         StatusBar->Panels->Items[0]->Text = "Элемент повернут.";
     }
 }
@@ -1524,32 +1650,47 @@ void __fastcall TMainForm::btnZoomFitClick(TObject *Sender) {
 
 void TMainForm::ApplyZoom() {
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
 }
 
 void __fastcall TMainForm::FormResize(TObject *Sender) {
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
 }
 
 void __fastcall TMainForm::WorkspaceResize(TObject *Sender) {
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
 }
 
 void TMainForm::UpdatePaintBoxSize() {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox) return;
+
     TRect bounds = GetCircuitBounds();
 
     int padding = 400;
-    int newWidth = std::max(Workspace->ClientWidth, bounds.Width() + padding);
-    int newHeight = std::max(Workspace->ClientHeight, bounds.Height() + padding);
+    int newWidth = std::max(currentTab->ScrollBox->ClientWidth, bounds.Width() + padding);
+    int newHeight = std::max(currentTab->ScrollBox->ClientHeight, bounds.Height() + padding);
 
-    CircuitImage->Width = static_cast<int>(newWidth * FZoomFactor);
-    CircuitImage->Height = static_cast<int>(newHeight * FZoomFactor);
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Width = static_cast<int>(newWidth * FZoomFactor);
+        currentTab->PaintBox->Height = static_cast<int>(newHeight * FZoomFactor);
+    }
 }
 
 void TMainForm::CenterCircuit() {
-    if (FElements.empty()) return;
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || !currentTab->ScrollBox || currentTab->Elements.empty()) return;
 
     TRect bounds = GetCircuitBounds();
 
@@ -1558,11 +1699,11 @@ void TMainForm::CenterCircuit() {
     int centerY = (bounds.Top + bounds.Bottom) / 2;
 
     // Вычисляем центр видимой области в логических координатах
-    int visibleWidth = Workspace->ClientWidth / FZoomFactor;
-    int visibleHeight = Workspace->ClientHeight / FZoomFactor;
+    int visibleWidth = currentTab->ScrollBox->ClientWidth / FZoomFactor;
+    int visibleHeight = currentTab->ScrollBox->ClientHeight / FZoomFactor;
 
-    int visibleCenterX = Workspace->HorzScrollBar->Position / FZoomFactor + visibleWidth / 2;
-    int visibleCenterY = Workspace->VertScrollBar->Position / FZoomFactor + visibleHeight / 2;
+    int visibleCenterX = currentTab->ScrollBox->HorzScrollBar->Position / FZoomFactor + visibleWidth / 2;
+    int visibleCenterY = currentTab->ScrollBox->VertScrollBar->Position / FZoomFactor + visibleHeight / 2;
 
     // Вычисляем новое положение для центрирования
     int newScrollX = (centerX - visibleWidth / 2) * FZoomFactor;
@@ -1571,22 +1712,25 @@ void TMainForm::CenterCircuit() {
     // Ограничиваем значения скролла
     newScrollX = std::max(0, newScrollX);
     newScrollY = std::max(0, newScrollY);
-    newScrollX = std::min(newScrollX, Workspace->HorzScrollBar->Range - visibleWidth);
-    newScrollY = std::min(newScrollY, Workspace->VertScrollBar->Range - visibleHeight);
+    newScrollX = std::min(newScrollX, currentTab->ScrollBox->HorzScrollBar->Range - visibleWidth);
+    newScrollY = std::min(newScrollY, currentTab->ScrollBox->VertScrollBar->Range - visibleHeight);
 
-    Workspace->HorzScrollBar->Position = newScrollX;
-    Workspace->VertScrollBar->Position = newScrollY;
+    currentTab->ScrollBox->HorzScrollBar->Position = newScrollX;
+    currentTab->ScrollBox->VertScrollBar->Position = newScrollY;
 
-    CircuitImage->Repaint();
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
 }
 
 TRect TMainForm::GetCircuitBounds() {
-    if (FElements.empty()) {
-        return TRect(0, 0, CircuitImage->Width, CircuitImage->Height);
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab || currentTab->Elements.empty()) {
+        return TRect(0, 0, 800, 600);
     }
 
-    TRect bounds = FElements[0]->Bounds;
-    for (auto& element : FElements) {
+    TRect bounds = currentTab->Elements[0]->Bounds;
+    for (auto& element : currentTab->Elements) {
         bounds.Left = std::min(bounds.Left, element->Bounds.Left);
         bounds.Top = std::min(bounds.Top, element->Bounds.Top);
         bounds.Right = std::max(bounds.Right, element->Bounds.Right);
@@ -1596,10 +1740,158 @@ TRect TMainForm::GetCircuitBounds() {
     return bounds;
 }
 
+// ИСПРАВЛЕННЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ ВКЛАДКАМИ
+
+TTabSheet* TMainForm::CreateNewTab(const String& Title, TSubCircuit* SubCircuit) {
+    TTabSheet* newTab = new TTabSheet(SchemePageControl);
+    newTab->PageControl = SchemePageControl;
+    newTab->Caption = Title;
+
+    // Создаем контейнер для данных вкладки
+    TTabData* tabData = new TTabData();
+    tabData->ScrollBox = new TScrollBox(newTab);
+    tabData->ScrollBox->Parent = newTab;
+    tabData->ScrollBox->Align = alClient;
+    tabData->ScrollBox->OnMouseWheel = WorkspaceMouseWheel;
+    tabData->ScrollBox->OnResize = WorkspaceResize;
+
+    tabData->PaintBox = new TPaintBox(tabData->ScrollBox);
+    tabData->PaintBox->Parent = tabData->ScrollBox;
+    tabData->PaintBox->Align = alClient;
+    tabData->PaintBox->OnMouseDown = CircuitImageMouseDown;
+    tabData->PaintBox->OnMouseMove = CircuitImageMouseMove;
+    tabData->PaintBox->OnMouseUp = CircuitImageMouseUp;
+    tabData->PaintBox->OnPaint = CircuitImagePaint;
+
+    // Инициализируем данные вкладки
+    if (SubCircuit) {
+        // Для вкладки подсхемы копируем внутренние элементы и соединения
+        const auto& internalElements = SubCircuit->GetInternalElements();
+        const auto& internalConnections = SubCircuit->GetInternalConnections();
+
+        // Копируем элементы (необходимо глубокое копирование, но для простоты используем существующие)
+        // В реальной реализации нужно реализовать клонирование элементов
+        for (const auto& element : internalElements) {
+            // Создаем копию элемента
+            auto newElement = CreateElementByClassName(element->GetClassName(), tabData->NextElementId++,
+                                                     element->Bounds.Left, element->Bounds.Top);
+            if (newElement) {
+                newElement->SetBounds(element->Bounds);
+                // Копируем состояние
+                newElement->SetCurrentState(element->CurrentState);
+                // Копируем входы и выходы
+                for (size_t i = 0; i < std::min(element->Inputs.size(), newElement->Inputs.size()); ++i) {
+                    newElement->Inputs[i].Value = element->Inputs[i].Value;
+                }
+                for (size_t i = 0; i < std::min(element->Outputs.size(), newElement->Outputs.size()); ++i) {
+                    newElement->Outputs[i].Value = element->Outputs[i].Value;
+                }
+                tabData->Elements.push_back(std::move(newElement));
+            }
+        }
+
+        // Копируем соединения (требуется найти соответствующие точки в новых элементах)
+        for (const auto& conn : internalConnections) {
+            // Находим соответствующие элементы в новой вкладке по позиции и типу
+            TConnectionPoint* fromPoint = FindRestoredConnectionPoint(conn.first);
+            TConnectionPoint* toPoint = FindRestoredConnectionPoint(conn.second);
+
+            if (fromPoint && toPoint) {
+                tabData->Connections.push_back(std::make_pair(fromPoint, toPoint));
+            }
+        }
+
+        tabData->IsSubCircuit = true;
+        tabData->SubCircuit = SubCircuit;
+        SubCircuit->SetAssociatedTab(newTab);
+    } else {
+        // Основная схема
+        tabData->IsSubCircuit = false;
+    }
+
+    newTab->Tag = NativeInt(tabData);
+    return newTab;
+}
+
+void TMainForm::UpdateCurrentTab() {
+    // При переключении вкладок обновляем выделение и прочее
+    FSelectedElements.clear();
+    FSelectedElement = nullptr;
+    FIsConnecting = false;
+    FConnectionStart = nullptr;
+}
+
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - добавлен const квалификатор
+TTabData* TMainForm::GetCurrentTabData() const {
+    if (SchemePageControl->ActivePage && SchemePageControl->ActivePage->Tag != 0) {
+        return reinterpret_cast<TTabData*>(SchemePageControl->ActivePage->Tag);
+    }
+    return nullptr;
+}
+
+void __fastcall TMainForm::SchemePageControlChange(TObject *Sender) {
+    UpdateCurrentTab();
+}
+
+void __fastcall TMainForm::miCloseTabClick(TObject *Sender) {
+    if (SchemePageControl->PageCount > 1 && SchemePageControl->ActivePage) {
+        TTabSheet* activeTab = SchemePageControl->ActivePage;
+        TTabData* tabData = reinterpret_cast<TTabData*>(activeTab->Tag);
+
+        if (tabData) {
+            // Если это вкладка подсхемы, обновляем данные в подсхеме перед закрытием
+            if (tabData->IsSubCircuit && tabData->SubCircuit) {
+                // Здесь можно сохранить изменения из вкладки обратно в подсхему
+                // Для этого нужно скопировать элементы и соединения из tabData обратно в SubCircuit
+                // Это сложная операция, требующая глубокого копирования, поэтому пока просто закрываем
+            }
+
+            delete tabData;
+        }
+
+        delete activeTab;
+    }
+}
+
+void TMainForm::CloseTab(TTabSheet* Tab) {
+    if (SchemePageControl->PageCount > 1 && Tab) {
+        TTabData* tabData = reinterpret_cast<TTabData*>(Tab->Tag);
+        if (tabData) {
+            delete tabData;
+        }
+        delete Tab;
+    }
+}
+
+void TMainForm::UpdateTabTitle(TTabSheet* Tab, const String& Title) {
+    if (Tab) {
+        Tab->Caption = Title;
+    }
+}
+
+void __fastcall TMainForm::miExitClick(TObject *Sender) {
+    Close();
+}
+
+void __fastcall TMainForm::miAboutClick(TObject *Sender) {
+    String aboutText =
+        L"Setun IDE - Среда разработки для троичной логики\n"
+        L"Основано на книге 1965 года\n"
+        L"Тимошенко А.Н. 2022 год\n\n"
+        L"Модульная архитектура - поддержка загружаемых библиотек элементов";
+
+    Application->MessageBox(aboutText.w_str(), L"О программе", MB_OK | MB_ICONINFORMATION);
+}
+
+// ИСПРАВЛЕННЫЕ ОБРАБОТЧИКИ СОХРАНЕНИЯ И ЗАГРУЗКИ
+
 void __fastcall TMainForm::btnSaveSchemeClick(TObject *Sender) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
+
     if (SaveDialog->Execute()) {
         try {
-            SaveSchemeToFile(SaveDialog->FileName);
+            SaveSchemeToFile(SaveDialog->FileName, currentTab);
             StatusBar->Panels->Items[0]->Text = "Схема сохранена: " + SaveDialog->FileName;
         }
         catch (Exception &e) {
@@ -1613,8 +1905,11 @@ void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
         try {
             if (Application->MessageBox(L"Загрузить новую схему? Текущая схема будет потеряна.",
                 L"Подтверждение", MB_YESNO | MB_ICONQUESTION) == ID_YES) {
-                LoadSchemeFromFile(OpenDialog->FileName);
-                StatusBar->Panels->Items[0]->Text = "Схема загружена: " + OpenDialog->FileName;
+                TTabData* currentTab = GetCurrentTabData();
+                if (currentTab) {
+                    LoadSchemeFromFile(OpenDialog->FileName, currentTab);
+                    StatusBar->Panels->Items[0]->Text = "Схема загружена: " + OpenDialog->FileName;
+                }
             }
         }
         catch (Exception &e) {
@@ -1622,6 +1917,8 @@ void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
         }
     }
 }
+
+// ИСПРАВЛЕННЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ВЫДЕЛЕННЫМИ ЭЛЕМЕНТАМИ
 
 std::vector<TCircuitElement*> TMainForm::GetSelectedElements() {
     return FSelectedElements;
@@ -1634,6 +1931,9 @@ void TMainForm::CreateSubCircuitFromSelection() {
         StatusBar->Panels->Items[0]->Text = "Выберите хотя бы 2 элемента для группировки";
         return;
     }
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
 
     TRect totalBounds = selectedElements[0]->Bounds;
     for (auto element : selectedElements) {
@@ -1648,7 +1948,7 @@ void TMainForm::CreateSubCircuitFromSelection() {
 
     // Собираем внутренние соединения
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> internalConnections;
-    for (auto& connection : FConnections) {
+    for (auto& connection : currentTab->Connections) {
         bool fromSelected = false;
         bool toSelected = false;
 
@@ -1665,32 +1965,32 @@ void TMainForm::CreateSubCircuitFromSelection() {
     // Собираем элементы для подсхемы
     std::vector<std::unique_ptr<TCircuitElement>> subCircuitElements;
     for (auto selectedElement : selectedElements) {
-        auto it = std::find_if(FElements.begin(), FElements.end(),
+        auto it = std::find_if(currentTab->Elements.begin(), currentTab->Elements.end(),
             [selectedElement](const std::unique_ptr<TCircuitElement>& elem) {
                 return elem.get() == selectedElement;
             });
 
-        if (it != FElements.end()) {
+        if (it != currentTab->Elements.end()) {
             subCircuitElements.push_back(std::move(*it));
         }
     }
 
-    // Удаляем элементы из основного списка
-    FElements.erase(std::remove_if(FElements.begin(), FElements.end(),
+    // ИСПРАВЛЕННАЯ ЛЯМБДА - используем get() для сравнения с nullptr
+    currentTab->Elements.erase(std::remove_if(currentTab->Elements.begin(), currentTab->Elements.end(),
         [](const std::unique_ptr<TCircuitElement>& elem) {
-            return elem == nullptr;
-        }), FElements.end());
+            return elem.get() == nullptr;
+        }), currentTab->Elements.end());
 
     // Удаляем внутренние соединения из основного списка
     for (auto& internalConn : internalConnections) {
-        auto it = std::find(FConnections.begin(), FConnections.end(), internalConn);
-        if (it != FConnections.end()) {
-            FConnections.erase(it);
+        auto it = std::find(currentTab->Connections.begin(), currentTab->Connections.end(), internalConn);
+        if (it != currentTab->Connections.end()) {
+            currentTab->Connections.erase(it);
         }
     }
 
     // Создаем подсхему
-    auto subCircuit = std::make_unique<TSubCircuit>(FNextElementId++, centerX, centerY,
+    auto subCircuit = std::make_unique<TSubCircuit>(currentTab->NextElementId++, centerX, centerY,
                                                    std::move(subCircuitElements),
                                                    internalConnections);
 
@@ -1698,18 +1998,21 @@ void TMainForm::CreateSubCircuitFromSelection() {
     FSelectedElements.clear();
     FSelectedElements.push_back(subCircuit.get());
 
-    FElements.push_back(std::move(subCircuit));
+    currentTab->Elements.push_back(std::move(subCircuit));
 
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
     StatusBar->Panels->Items[0]->Text = "Создана подсхема из " + IntToStr(static_cast<int>(selectedElements.size())) + " элементов";
 }
 
 TConnectionPoint* TMainForm::FindRestoredConnectionPoint(const TConnectionPoint* originalPoint) {
-    if (!originalPoint || !originalPoint->Owner) return nullptr;
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return nullptr;
 
     // Ищем восстановленный элемент по оригинальным координатам и имени
-    for (auto& element : FElements) {
+    for (auto& element : currentTab->Elements) {
         if (element->Bounds.Left == originalPoint->Owner->Bounds.Left &&
             element->Bounds.Top == originalPoint->Owner->Bounds.Top &&
             element->Name == originalPoint->Owner->Name) {
@@ -1739,6 +2042,9 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
     TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(SubCircuit);
     if (!subCircuit) return;
 
+    TTabData* currentTab = GetCurrentTabData();
+    if (!currentTab) return;
+
     const auto& internalElements = subCircuit->GetInternalElements();
     const auto& internalConnections = subCircuit->GetInternalConnections();
 
@@ -1748,7 +2054,7 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
         TRect originalBounds = element->Bounds;
 
         // Создаем новый элемент того же типа
-        auto newElement = CreateElementFromCurrent(element->Name, originalBounds.Left, originalBounds.Top);
+        auto newElement = CreateElementByClassName(element->GetClassName(), currentTab->NextElementId++, originalBounds.Left, originalBounds.Top);
         if (newElement) {
             newElement->SetBounds(originalBounds);
             newElement->CalculateRelativePositions();
@@ -1765,7 +2071,7 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
                 newElement->Outputs[i].RelY = element->Outputs[i].RelY;
             }
 
-            FElements.push_back(std::move(newElement));
+            currentTab->Elements.push_back(std::move(newElement));
         }
     }
 
@@ -1775,25 +2081,27 @@ void TMainForm::UngroupSubCircuit(TCircuitElement* SubCircuit) {
         TConnectionPoint* toPoint = FindRestoredConnectionPoint(conn.second);
 
         if (fromPoint && toPoint) {
-            FConnections.push_back(std::make_pair(fromPoint, toPoint));
+            currentTab->Connections.push_back(std::make_pair(fromPoint, toPoint));
         }
     }
 
     // Удаляем подсхему
-    auto it = std::find_if(FElements.begin(), FElements.end(),
+    auto it = std::find_if(currentTab->Elements.begin(), currentTab->Elements.end(),
         [SubCircuit](const std::unique_ptr<TCircuitElement>& elem) {
             return elem.get() == SubCircuit;
         });
 
-    if (it != FElements.end()) {
-        FElements.erase(it);
+    if (it != currentTab->Elements.end()) {
+        currentTab->Elements.erase(it);
     }
 
     FSelectedElement = nullptr;
     FSelectedElements.clear();
 
     UpdatePaintBoxSize();
-    CircuitImage->Repaint();
+    if (currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
     StatusBar->Panels->Items[0]->Text = "Подсхема разгруппирована";
 }
 
@@ -1814,16 +2122,18 @@ void __fastcall TMainForm::btnUngroupElementsClick(TObject *Sender) {
     }
 }
 
-void __fastcall TMainForm::miExitClick(TObject *Sender) {
-    Close();
-}
+void __fastcall TMainForm::miViewSubCircuitClick(TObject *Sender) {
+    if (FSelectedElement) {
+        TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(FSelectedElement);
+        if (subCircuit) {
+            // Создаем новую вкладку для просмотра подсхемы
+            String tabName = "Просмотр: " + subCircuit->Name;
+            TTabSheet* viewTab = CreateNewTab(tabName, subCircuit);
+            SchemePageControl->ActivePage = viewTab;
 
-void __fastcall TMainForm::miAboutClick(TObject *Sender) {
-    String aboutText =
-        L"Setun IDE - Среда разработки для троичной логики\n"
-        L"Основано на книге 1965 года\n"
-        L"Тимошенко А.Н. 2022 год\n\n"
-        L"Модульная архитектура - поддержка загружаемых библиотек элементов";
-
-    Application->MessageBox(aboutText.w_str(), L"О программе", MB_OK | MB_ICONINFORMATION);
+            StatusBar->Panels->Items[0]->Text = "Открыт просмотр подсхемы";
+        } else {
+            StatusBar->Panels->Items[0]->Text = "Выбранный элемент не является подсхемой";
+        }
+    }
 }

@@ -1,4 +1,4 @@
-#ifndef ComponentLibraryH
+﻿#ifndef ComponentLibraryH
 #define ComponentLibraryH
 
 #include "CircuitElement.h"
@@ -8,7 +8,7 @@
 #include <functional>
 #include <System.Classes.hpp>
 
-// ������� ����� ��� ���� ��������� ����������
+// Базовый класс для всех элементов библиотеки
 class TLibraryElement {
 public:
     virtual ~TLibraryElement() = default;
@@ -19,7 +19,7 @@ public:
     virtual void GetDefaultSize(int& Width, int& Height) const = 0;
 };
 
-// ���������� ���������� �������� ����������
+// Конкретная реализация элемента библиотеки
 template<typename T>
 class TConcreteLibraryElement : public TLibraryElement {
 private:
@@ -40,7 +40,7 @@ public:
     String GetCategory() const override { return FCategory; }
 
     std::unique_ptr<TCircuitElement> CreateElement(int Id, int X, int Y) const override {
-        return std::make_unique<T>(Id, X, Y);
+        return std::unique_ptr<TCircuitElement>(new T(Id, X, Y));
     }
 
     void GetDefaultSize(int& Width, int& Height) const override {
@@ -49,7 +49,7 @@ public:
     }
 };
 
-// ���������� �����������
+// Компонентная библиотека
 class TComponentLibrary {
 private:
     String FName;
@@ -58,13 +58,13 @@ private:
     std::vector<std::unique_ptr<TLibraryElement>> FElements;
     std::map<String, TLibraryElement*> FElementMap;
 
-    // ����� ��� ��������� ���������� ���������
+    // Метод для получения количества элементов
     int GetElementCount() const { return static_cast<int>(FElements.size()); }
 
 public:
     TComponentLibrary(const String& Name, const String& Description, const String& Version = "1.0");
 
-    // ����������� ���������
+    // Регистрация элемента
     template<typename T>
     void RegisterElement(const String& Name, const String& Description,
                         const String& Category = "General", int DefaultWidth = 80, int DefaultHeight = 60) {
@@ -73,14 +73,14 @@ public:
         FElements.push_back(std::move(element));
     }
 
-    // �������� ��������
+    // Создание элемента
     std::unique_ptr<TCircuitElement> CreateElement(const String& Name, int Id, int X, int Y) const;
 
-    // ����� ��������
+    // Поиск элемента
     bool HasElement(const String& Name) const;
     const TLibraryElement* GetElementInfo(const String& Name) const;
 
-    // ��������� �������
+    // Получение списков
     std::vector<String> GetElementNames() const;
     std::vector<String> GetElementNamesByCategory(const String& Category) const;
     std::vector<String> GetCategories() const;
@@ -91,7 +91,7 @@ public:
     __property int ElementCount = { read = GetElementCount };
 };
 
-// �������� ���������
+// Менеджер библиотек
 class TLibraryManager {
 private:
     std::vector<std::unique_ptr<TComponentLibrary>> FLibraries;
@@ -110,11 +110,11 @@ public:
     TComponentLibrary* GetLibrary(const String& Name) const;
     std::vector<String> GetLibraryNames() const;
 
-    // �������� ���������
+    // Создание элементов
     std::unique_ptr<TCircuitElement> CreateElement(const String& LibraryName, const String& ElementName, int Id, int X, int Y) const;
     std::unique_ptr<TCircuitElement> CreateElementFromCurrent(const String& ElementName, int Id, int X, int Y) const;
 
-    // ����� ���������
+    // Поиск элементов
     bool HasElement(const String& LibraryName, const String& ElementName) const;
     const TLibraryElement* GetElementInfo(const String& LibraryName, const String& ElementName) const;
 };

@@ -34,13 +34,30 @@ struct TLoadedLibrary {
     TUnregisterLibraryFunction UnregisterFunc;
 };
 
+// Структура для хранения данных вкладки
+struct TTabData {
+    TScrollBox* ScrollBox;
+    TPaintBox* PaintBox;
+    std::vector<std::unique_ptr<TCircuitElement>> Elements;
+    std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> Connections;
+    bool IsSubCircuit;
+    TCircuitElement* SubCircuit;
+    int NextElementId;
+
+    TTabData() : ScrollBox(nullptr), PaintBox(nullptr), IsSubCircuit(false), SubCircuit(nullptr), NextElementId(1) {}
+    ~TTabData() {
+        // Автоматическая очистка при удалении
+    }
+};
+
+// Предварительное объявление
+class TSubCircuit;
+
 class TMainForm : public TForm {
 __published:
     TPanel *ToolPanel;
     TPanel *LibraryPanel;
     TPanel *WorkspacePanel;
-    TScrollBox *Workspace;
-    TPaintBox *CircuitImage;
     TStatusBar *StatusBar;
     TButton *btnRunSimulation;
     TButton *btnResetSimulation;
@@ -77,9 +94,13 @@ __published:
     TMenuItem *miReset;
     TMenuItem *miHelp;
     TMenuItem *miAbout;
+    TPageControl *SchemePageControl;
+    TPopupMenu *TabPopupMenu;
+    TMenuItem *miCloseTab;
+    TMenuItem *miViewSubCircuit;
 
     void __fastcall WorkspaceMouseWheel(TObject *Sender, TShiftState Shift,
-    int WheelDelta, TPoint &MousePos, bool &Handled);
+    int WheelDelta, const TPoint &MousePos, bool &Handled);
     void __fastcall FormCreate(TObject *Sender);
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall FormResize(TObject *Sender);
@@ -109,6 +130,10 @@ __published:
     void __fastcall miExitClick(TObject *Sender);
     void __fastcall miAboutClick(TObject *Sender);
     void __fastcall FormKeyDown(TObject *Sender, WORD &Key, TShiftState Shift);
+    void __fastcall SchemePageControlChange(TObject *Sender);
+    void __fastcall miCloseTabClick(TObject *Sender);
+    void __fastcall miViewSubCircuitClick(TObject *Sender);
+    void __fastcall SimulationTimerTimer(TObject *Sender);
 
 private:
     std::vector<std::unique_ptr<TCircuitElement>> FElements;
@@ -133,6 +158,11 @@ private:
     std::unique_ptr<TComponentLibrary> FBasicLibrary;
     std::vector<TLoadedLibrary> FLoadedLibraries; // Все загруженные DLL
 
+    // Новые поля для симуляции и вкладок
+    bool FSimulationRunning;
+    int FSimulationStep;
+    TTimer* FSimulationTimer;
+
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
     void RunSimulationStep();
@@ -145,8 +175,8 @@ private:
     void ApplyZoom();
     void CenterCircuit();
     TRect GetCircuitBounds();
-    void SaveSchemeToFile(const String& FileName);
-    void LoadSchemeFromFile(const String& FileName);
+    void SaveSchemeToFile(const String& FileName, TTabData* TabData = nullptr);
+    void LoadSchemeFromFile(const String& FileName, TTabData* TabData = nullptr);
     std::vector<TCircuitElement*> GetSelectedElements();
     void CreateSubCircuitFromSelection();
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
@@ -165,7 +195,7 @@ private:
 
     // Новые методы для исправления проблем
     TConnectionPoint* FindRestoredConnectionPoint(const TConnectionPoint* originalPoint);
-    void OptimizedDrawCircuit(TCanvas* Canvas);
+    void OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData);
 
     // Методы для сериализации
     void SaveElementToIni(TCircuitElement* Element, TIniFile* IniFile, const String& Section);
@@ -182,6 +212,13 @@ private:
     TRegisterLibraryFunction FindRegisterFunction(HINSTANCE LibraryHandle);
     TUnregisterLibraryFunction FindUnregisterFunction(HINSTANCE LibraryHandle);
 
+    // Новые методы для управления вкладками
+    TTabSheet* CreateNewTab(const String& Title, TSubCircuit* SubCircuit = nullptr);
+    void UpdateCurrentTab();
+    TTabData* GetCurrentTabData() const;
+    void CloseTab(TTabSheet* Tab);
+    void UpdateTabTitle(TTabSheet* Tab, const String& Title);
+
 protected:
     // Делаем методы доступными для TSubCircuit
     friend class TSubCircuit;
@@ -194,6 +231,7 @@ class TSubCircuit : public TCircuitElement {
 private:
     std::vector<std::unique_ptr<TCircuitElement>> FInternalElements;
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> FInternalConnections;
+    TTabSheet* FAssociatedTab;
 
 public:
     TSubCircuit(int AId, int X, int Y,
@@ -204,6 +242,9 @@ public:
 
     const std::vector<std::unique_ptr<TCircuitElement>>& GetInternalElements() const { return FInternalElements; }
     const std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>>& GetInternalConnections() const { return FInternalConnections; }
+
+    void SetAssociatedTab(TTabSheet* Tab) { FAssociatedTab = Tab; }
+    TTabSheet* GetAssociatedTab() const { return FAssociatedTab; }
 
     // Методы сериализации
     virtual String GetClassName() const override { return "TSubCircuit"; }

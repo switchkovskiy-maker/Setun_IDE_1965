@@ -129,27 +129,17 @@ object MainForm: TMainForm
     TabOrder = 2
     ExplicitWidth = 746
     ExplicitHeight = 631
-    object Workspace: TScrollBox
+    object SchemePageControl: TPageControl
       Left = 1
       Top = 1
       Width = 748
-      Height = 630
+      Height = 650
       Align = alClient
+      PopupMenu = TabPopupMenu
       TabOrder = 0
-      OnMouseWheel = WorkspaceMouseWheel
-      OnResize = WorkspaceResize
+      OnChange = SchemePageControlChange
       ExplicitWidth = 744
       ExplicitHeight = 629
-      object CircuitImage: TPaintBox
-        Left = 0
-        Top = 0
-        Width = 744
-        Height = 626
-        OnMouseDown = CircuitImageMouseDown
-        OnMouseMove = CircuitImageMouseMove
-        OnMouseUp = CircuitImageMouseUp
-        OnPaint = CircuitImagePaint
-      end
     end
   end
   object StatusBar: TStatusBar
@@ -174,6 +164,10 @@ object MainForm: TMainForm
     object miRotateElement: TMenuItem
       Caption = #1055#1086#1074#1077#1088#1085#1091#1090#1100
       OnClick = miRotateElementClick
+    end
+    object miViewSubCircuit: TMenuItem
+      Caption = #1055#1088#1086#1089#1084#1086#1090#1088
+      OnClick = miViewSubCircuitClick
     end
     object miGroupElements: TMenuItem
       Caption = #1043#1088#1091#1087#1087#1080#1088#1086#1074#1072#1090#1100
@@ -259,7 +253,7 @@ object MainForm: TMainForm
       end
     end
     object miSimulation: TMenuItem
-      Caption = #1057#1080#1084#1091#1083#1103#1094#1080#1103
+      Caption = #1057#1080#1084#1091#1083#1103#1094#1080#1100
       object miRun: TMenuItem
         Caption = #1047#1072#1087#1091#1089#1090#1080#1090#1100
         ShortCut = 120
@@ -277,6 +271,14 @@ object MainForm: TMainForm
         Caption = #1054' '#1087#1088#1086#1075#1088#1072#1084#1084#1077
         OnClick = miAboutClick
       end
+    end
+  end
+  object TabPopupMenu: TPopupMenu
+    Left = 720
+    Top = 200
+    object miCloseTab: TMenuItem
+      Caption = #1047#1072#1082#1088#1099#1090#1100' '#1074#1082#1083#1072#1076#1082#1091
+      OnClick = miCloseTabClick
     end
   end
 end
