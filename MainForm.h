@@ -133,7 +133,11 @@ __published:
     void __fastcall SchemePageControlChange(TObject *Sender);
     void __fastcall miCloseTabClick(TObject *Sender);
     void __fastcall miViewSubCircuitClick(TObject *Sender);
-    void __fastcall SimulationTimerTimer(TObject *Sender);
+	void __fastcall SimulationTimerTimer(TObject *Sender);
+    void __fastcall SchemePageControlDrawTab(TCustomTabControl *Control, int TabIndex, const TRect &Rect, bool Active);
+    void __fastcall SchemePageControlMouseDown(TObject *Sender, TMouseButton Button, TShiftState Shift, int X, int Y);
+    TRect GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect);
+    bool IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex, int X, int Y);
 
 private:
     std::vector<std::unique_ptr<TCircuitElement>> FElements;
@@ -151,7 +155,12 @@ private:
     int FDragOffsetY;
     double FZoomFactor;
     int FScrollOffsetX;
-    int FScrollOffsetY;
+	int FScrollOffsetY;
+
+    int FHotCloseTabIndex; // Вкладка, на которой навели на крестик
+	void __fastcall SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
+    void UpdateTabWidths();
+
 
     // Новые поля для управления библиотеками
     std::unique_ptr<TLibraryManager> FLibraryManager;

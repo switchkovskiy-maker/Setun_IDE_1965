@@ -242,11 +242,12 @@ TConnectionPoint* TSubCircuit::FindConnectionPointInInternalElements(const TConn
 }
 
 // Конструктор MainForm
-__fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
+__fastcall TMainForm::TMainForm(TComponent* Owner)
+    : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FIsSelecting(false),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
-    FScrollOffsetX(0), FScrollOffsetY(0), FSimulationRunning(false), FSimulationStep(0) {
+    FScrollOffsetX(0), FScrollOffsetY(0), FSimulationRunning(false), FSimulationStep(0), FHotCloseTabIndex(-1) {
 
     // Включаем двойную буферизацию
     DoubleBuffered = true;
@@ -255,6 +256,13 @@ __fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     WorkspacePanel->DoubleBuffered = true;
 
     KeyPreview = true;
+
+    // Настраиваем отрисовку вкладок с крестиками
+    SchemePageControl->OwnerDraw = true;
+    SchemePageControl->OnDrawTab = SchemePageControlDrawTab;
+	SchemePageControl->OnMouseDown = SchemePageControlMouseDown;
+    SchemePageControl->OnMouseMove = SchemePageControlMouseMove;
+
 
     // Инициализируем таймер симуляции
     FSimulationTimer = new TTimer(this);
@@ -1745,9 +1753,9 @@ TRect TMainForm::GetCircuitBounds() {
 TTabSheet* TMainForm::CreateNewTab(const String& Title, TSubCircuit* SubCircuit) {
     TTabSheet* newTab = new TTabSheet(SchemePageControl);
     newTab->PageControl = SchemePageControl;
-    newTab->Caption = Title;
+	newTab->Caption = Title;
 
-    // Создаем контейнер для данных вкладки
+	// Создаем контейнер для данных вкладки
     TTabData* tabData = new TTabData();
     tabData->ScrollBox = new TScrollBox(newTab);
     tabData->ScrollBox->Parent = newTab;
@@ -1809,7 +1817,10 @@ TTabSheet* TMainForm::CreateNewTab(const String& Title, TSubCircuit* SubCircuit)
         tabData->IsSubCircuit = false;
     }
 
-    newTab->Tag = NativeInt(tabData);
+	newTab->Tag = NativeInt(tabData);
+
+    // Обновляем ширину вкладок после создания новой
+	UpdateTabWidths();
     return newTab;
 }
 
@@ -1857,9 +1868,32 @@ void TMainForm::CloseTab(TTabSheet* Tab) {
     if (SchemePageControl->PageCount > 1 && Tab) {
         TTabData* tabData = reinterpret_cast<TTabData*>(Tab->Tag);
         if (tabData) {
+            // Если это вкладка подсхемы, обновляем данные в подсхеме перед закрытием
+            if (tabData->IsSubCircuit && tabData->SubCircuit) {
+                TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(tabData->SubCircuit);
+                if (subCircuit) {
+                    subCircuit->SetAssociatedTab(nullptr);
+                }
+            }
+
             delete tabData;
         }
+
+        // Удаляем вкладку из PageControl перед физическим удалением
+        Tab->PageControl = nullptr;
         delete Tab;
+
+        // Сбрасываем состояние наведения
+        FHotCloseTabIndex = -1;
+
+        // Обновляем ширину вкладок после закрытия
+		UpdateTabWidths();
+
+        // Обновляем интерфейс после закрытия вкладки
+        UpdateCurrentTab();
+        StatusBar->Panels->Items[0]->Text = "Вкладка закрыта";
+    } else if (SchemePageControl->PageCount == 1) {
+        StatusBar->Panels->Items[0]->Text = "Нельзя закрыть последнюю вкладку";
     }
 }
 
@@ -2136,4 +2170,191 @@ void __fastcall TMainForm::miViewSubCircuitClick(TObject *Sender) {
             StatusBar->Panels->Items[0]->Text = "Выбранный элемент не является подсхемой";
         }
     }
+}
+
+// Метод для получения области крестика на вкладке
+TRect TMainForm::GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect) {
+    int closeButtonSize = 12;
+    int margin = 4;
+
+    TRect closeRect;
+    closeRect.Left = TabRect.Right - closeButtonSize - margin;
+    closeRect.Right = closeRect.Left + closeButtonSize;
+    closeRect.Top = TabRect.Top + (TabRect.Height() - closeButtonSize) / 2;
+    closeRect.Bottom = closeRect.Top + closeButtonSize;
+
+    return closeRect;
+}
+
+// Метод для проверки, находится ли точка в области крестика
+bool TMainForm::IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex, int X, int Y) {
+    TRect tabRect = Control->TabRect(TabIndex);
+    TRect closeRect = GetTabCloseButtonRect(Control, TabIndex, tabRect);
+
+    return (X >= closeRect.Left && X <= closeRect.Right &&
+            Y >= closeRect.Top && Y <= closeRect.Bottom);
+}
+
+// Отрисовка вкладки с крестиком
+// Отрисовка вкладки с крестиком (улучшенная версия)
+// Отрисовка вкладки с крестиком (с подсветкой)
+void __fastcall TMainForm::SchemePageControlDrawTab(TCustomTabControl *Control, int TabIndex, const TRect &Rect, bool Active) {
+    TCanvas *canvas = Control->Canvas;
+
+    // Сохраняем текущие настройки
+    TColor oldBrushColor = canvas->Brush->Color;
+    TColor oldPenColor = canvas->Pen->Color;
+    TColor oldFontColor = canvas->Font->Color;
+    TFontStyles oldFontStyles = canvas->Font->Style;
+
+    try {
+        // Рисуем фон вкладки
+        if (Active) {
+            canvas->Brush->Color = clHighlight;
+            canvas->Font->Color = clHighlightText;
+        } else {
+            canvas->Brush->Color = clBtnFace;
+            canvas->Font->Color = clWindowText;
+        }
+
+        canvas->FillRect(Rect);
+
+        // Получаем текст вкладки
+        TPageControl* pageControl = dynamic_cast<TPageControl*>(Control);
+        String tabText = "";
+        if (pageControl && TabIndex >= 0 && TabIndex < pageControl->PageCount) {
+            tabText = pageControl->Pages[TabIndex]->Caption;
+        }
+
+        // Рисуем текст вкладки (с отступом для крестика)
+        TRect textRect = Rect;
+        textRect.Right -= 20; // Отступ для крестика
+
+        canvas->Font->Style = TFontStyles() << fsBold;
+        canvas->TextOut(textRect.Left + 8, textRect.Top + 4, tabText);
+
+        // Рисуем крестик
+        TRect closeRect = GetTabCloseButtonRect(Control, TabIndex, Rect);
+
+        // Определяем, наведен ли курсор на этот крестик
+        bool isHot = (FHotCloseTabIndex == TabIndex);
+
+        // Фон крестика
+        if (isHot) {
+            canvas->Brush->Color = clRed; // Подсвечиваем красным при наведении
+        } else {
+            canvas->Brush->Color = Active ? clHighlight : clBtnFace;
+        }
+        canvas->FillRect(closeRect);
+
+        // Рамка крестика
+        canvas->Pen->Color = isHot ? clWhite : (Active ? clHighlightText : clGray);
+        canvas->Rectangle(closeRect.Left, closeRect.Top, closeRect.Right, closeRect.Bottom);
+
+        // Линии крестика
+        canvas->Pen->Color = isHot ? clWhite : (Active ? clHighlightText : clBlack);
+        canvas->Pen->Width = 2;
+
+        int crossMargin = 3;
+        canvas->MoveTo(closeRect.Left + crossMargin, closeRect.Top + crossMargin);
+        canvas->LineTo(closeRect.Right - crossMargin, closeRect.Bottom - crossMargin);
+
+        canvas->MoveTo(closeRect.Right - crossMargin, closeRect.Top + crossMargin);
+        canvas->LineTo(closeRect.Left + crossMargin, closeRect.Bottom - crossMargin);
+
+        canvas->Pen->Width = 1;
+    }
+    __finally {
+        // Восстанавливаем настройки
+        canvas->Brush->Color = oldBrushColor;
+        canvas->Pen->Color = oldPenColor;
+        canvas->Font->Color = oldFontColor;
+        canvas->Font->Style = oldFontStyles;
+    }
+}
+
+// Обработка кликов по вкладкам
+void __fastcall TMainForm::SchemePageControlMouseDown(TObject *Sender, TMouseButton Button, TShiftState Shift, int X, int Y) {
+    if (Button == mbLeft) {
+        TPageControl *pageControl = dynamic_cast<TPageControl*>(Sender);
+        if (!pageControl) return;
+
+        // Проверяем все вкладки на клик по крестику
+        for (int i = 0; i < pageControl->PageCount; i++) {
+            if (IsPointInTabCloseButton(pageControl, i, X, Y)) {
+                // Закрываем вкладку
+                CloseTab(pageControl->Pages[i]);
+                break;
+            }
+        }
+    }
+}
+
+// Обработка движения мыши над PageControl для подсветки крестиков
+void __fastcall TMainForm::SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y) {
+    TPageControl *pageControl = dynamic_cast<TPageControl*>(Sender);
+    if (!pageControl) return;
+
+    int oldHotCloseTabIndex = FHotCloseTabIndex;
+    FHotCloseTabIndex = -1;
+
+    // Проверяем все вкладки на наведение на крестик
+    for (int i = 0; i < pageControl->PageCount; i++) {
+        if (IsPointInTabCloseButton(pageControl, i, X, Y)) {
+            FHotCloseTabIndex = i;
+            break;
+        }
+    }
+
+    // Перерисовываем если состояние изменилось
+    if (FHotCloseTabIndex != oldHotCloseTabIndex) {
+        pageControl->Invalidate();
+    }
+
+    // Меняем курсор если над крестиком
+    if (FHotCloseTabIndex >= 0) {
+        pageControl->Cursor = crHandPoint;
+    } else {
+        pageControl->Cursor = crDefault;
+    }
+}
+
+// Метод для автоматической установки ширины вкладок
+void TMainForm::UpdateTabWidths() {
+    TCanvas* canvas = SchemePageControl->Canvas;
+    canvas->Font->Assign(SchemePageControl->Font);
+
+    int minTabWidth = 120; // Минимальная ширина
+    int maxTabWidth = 200; // Максимальная ширина
+    int padding = 40; // Отступы для текста и крестика
+
+    for (int i = 0; i < SchemePageControl->PageCount; i++) {
+        String tabText = SchemePageControl->Pages[i]->Caption;
+        int textWidth = canvas->TextWidth(tabText);
+        int calculatedWidth = textWidth + padding;
+
+        // Ограничиваем ширину
+        if (calculatedWidth < minTabWidth) {
+            calculatedWidth = minTabWidth;
+        } else if (calculatedWidth > maxTabWidth) {
+            calculatedWidth = maxTabWidth;
+        }
+
+        // Если нужно установить разную ширину для каждой вкладки,
+        // это можно сделать через OwnerDraw, но в стандартном TPageControl
+        // все вкладки имеют одинаковую ширину
+    }
+
+    // Устанавливаем ширину для всех вкладок (по самой широкой)
+    int maxWidth = minTabWidth;
+    for (int i = 0; i < SchemePageControl->PageCount; i++) {
+        String tabText = SchemePageControl->Pages[i]->Caption;
+        int textWidth = canvas->TextWidth(tabText);
+        int calculatedWidth = textWidth + padding;
+        if (calculatedWidth > maxWidth && calculatedWidth <= maxTabWidth) {
+            maxWidth = calculatedWidth;
+        }
+    }
+
+    SchemePageControl->TabWidth = maxWidth;
 }
