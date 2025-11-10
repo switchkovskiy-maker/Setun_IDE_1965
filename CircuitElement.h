@@ -21,7 +21,7 @@ protected:
     void DrawTernaryElement(TCanvas* Canvas);
     void DrawControlLine(TCanvas* Canvas, const TConnectionPoint& Point);
     void DrawCrossingLine(TCanvas* Canvas, int X1, int Y1, int X2, int Y2);
-    void DrawConnectionPoints(TCanvas* Canvas);
+	void DrawConnectionPoints(TCanvas* Canvas);
 
 public:
     TCircuitElement(int AId, const String& AName, int X, int Y);
@@ -31,39 +31,60 @@ public:
     virtual void Draw(TCanvas* Canvas);
     virtual TConnectionPoint* GetConnectionAt(int X, int Y);
 
-    void SetBounds(const TRect& NewBounds) {
-        FBounds = NewBounds;
+void SetBounds(const TRect& NewBounds) {
+    FBounds = NewBounds;
 
-        for (auto& input : FInputs) {
-            input.X = NewBounds.Left + (int)(input.RelX * NewBounds.Width());
-            input.Y = NewBounds.Top + (int)(input.RelY * NewBounds.Height());
-        }
-        for (auto& output : FOutputs) {
-            output.X = NewBounds.Left + (int)(output.RelX * NewBounds.Width());
-            output.Y = NewBounds.Top + (int)(output.RelY * NewBounds.Height());
-        }
-    }
+    // Обновляем абсолютные координаты на основе относительных с привязкой к сетке
+    int gridSize = 20;
 
-    void CalculateRelativePositions() {
-        for (auto& input : FInputs) {
-            if (FBounds.Width() > 0 && FBounds.Height() > 0) {
-                input.RelX = (double)(input.X - FBounds.Left) / FBounds.Width();
-                input.RelY = (double)(input.Y - FBounds.Top) / FBounds.Height();
-            } else {
-                input.RelX = 0.0;
-                input.RelY = 0.5;
-            }
-        }
-        for (auto& output : FOutputs) {
-            if (FBounds.Width() > 0 && FBounds.Height() > 0) {
-                output.RelX = (double)(output.X - FBounds.Left) / FBounds.Width();
-                output.RelY = (double)(output.Y - FBounds.Top) / FBounds.Height();
-            } else {
-                output.RelX = 1.0;
-                output.RelY = 0.5;
-            }
-        }
+    for (auto& input : FInputs) {
+        input.X = NewBounds.Left + (int)(input.RelX * NewBounds.Width());
+        input.Y = NewBounds.Top + (int)(input.RelY * NewBounds.Height());
+        // Привязываем к сетке
+        input.X = ((input.X + gridSize/2) / gridSize) * gridSize;
+        input.Y = ((input.Y + gridSize/2) / gridSize) * gridSize;
     }
+    for (auto& output : FOutputs) {
+        output.X = NewBounds.Left + (int)(output.RelX * NewBounds.Width());
+        output.Y = NewBounds.Top + (int)(output.RelY * NewBounds.Height());
+        // Привязываем к сетке
+        output.X = ((output.X + gridSize/2) / gridSize) * gridSize;
+        output.Y = ((output.Y + gridSize/2) / gridSize) * gridSize;
+	}
+	}
+
+
+	void TCircuitElement::CalculateRelativePositions() {
+		int gridSize = 20; // Размер сетки
+
+		for (auto& input : FInputs) {
+			// Привязываем абсолютные координаты к сетке
+			input.X = ((input.X + gridSize/2) / gridSize) * gridSize;
+			input.Y = ((input.Y + gridSize/2) / gridSize) * gridSize;
+
+			if (FBounds.Width() > 0 && FBounds.Height() > 0) {
+				input.RelX = (double)(input.X - FBounds.Left) / FBounds.Width();
+				input.RelY = (double)(input.Y - FBounds.Top) / FBounds.Height();
+			} else {
+				input.RelX = 0.0;
+				input.RelY = 0.5;
+			}
+		}
+
+		for (auto& output : FOutputs) {
+			// Привязываем абсолютные координаты к сетке
+			output.X = ((output.X + gridSize/2) / gridSize) * gridSize;
+			output.Y = ((output.Y + gridSize/2) / gridSize) * gridSize;
+
+			if (FBounds.Width() > 0 && FBounds.Height() > 0) {
+				output.RelX = (double)(output.X - FBounds.Left) / FBounds.Width();
+				output.RelY = (double)(output.Y - FBounds.Top) / FBounds.Height();
+			} else {
+				output.RelX = 1.0;
+				output.RelY = 0.5;
+			}
+		}
+	}
 
     void SetId(int AId) { FId = AId; }
     void SetName(const String& AName) { FName = AName; }

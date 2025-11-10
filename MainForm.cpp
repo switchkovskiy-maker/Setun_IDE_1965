@@ -338,7 +338,11 @@ bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
 TPoint TMainForm::GetBestPlacementPosition(int width, int height) {
     TPoint visibleCenter = GetVisibleAreaCenter();
 
+    // Привязка размеров к сетке (округление до ближайшего кратного сетке)
     int gridSize = 20;
+    width = ((width + gridSize - 1) / gridSize) * gridSize;
+	height = ((height + gridSize - 1) / gridSize) * gridSize;
+
     int x = ((visibleCenter.X - width / 2) / gridSize) * gridSize;
     int y = ((visibleCenter.Y - height / 2) / gridSize) * gridSize;
 
@@ -737,7 +741,14 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
 
     // Устанавливаем новые границы
     newElement->SetBounds(TRect(bestPos.X, bestPos.Y, bestPos.X + width, bestPos.Y + height));
-    newElement->CalculateRelativePositions();
+	newElement->CalculateRelativePositions();
+
+
+	newElement->SetBounds(TRect(bestPos.X, bestPos.Y, bestPos.X + width, bestPos.Y + height));
+	newElement->CalculateRelativePositions(); // Это привяжет точки к сетке
+
+	// принудительный пересчет еще раз после установки границ:
+	newElement->CalculateRelativePositions();
 
     if (currentTab) {
         currentTab->Elements.push_back(std::move(newElement));
@@ -1059,8 +1070,8 @@ for (auto& connection : TabData->Connections) {
     TColor connectionColor = TernaryToColor(start->Value);
 
     // ПРИВЯЗКА КООРДИНАТ ТОЧЕК К СЕТКЕ
-    TPoint logicalStart = SnapToGridPoint(TPoint(start->X, start->Y));
-    TPoint logicalEnd = SnapToGridPoint(TPoint(end->X, end->Y));
+    TPoint logicalStart = TPoint(start->X, start->Y);
+	TPoint logicalEnd = TPoint(end->X, end->Y);
 
     TPoint screenStart = LogicalToScreen(logicalStart);
     TPoint screenEnd = LogicalToScreen(logicalEnd);
@@ -1397,31 +1408,34 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
     // Оптимизация: обновляем только при значительном перемещении
     static int lastX = -1, lastY = -1;
 
-    if (FIsDragging && FDraggedElement) {
-        if (abs(logicalPos.X - lastX) > 1 || abs(logicalPos.Y - lastY) > 1) {
-            int newLeft = logicalPos.X - FDragOffsetX;
-            int newTop = logicalPos.Y - FDragOffsetY;
+	if (FIsDragging && FDraggedElement) {
+		if (abs(logicalPos.X - lastX) > 1 || abs(logicalPos.Y - lastY) > 1) {
+		int newLeft = logicalPos.X - FDragOffsetX;
+		int newTop = logicalPos.Y - FDragOffsetY;
 
-            // ПРИВЯЗКА К СЕТКЕ ПРИ ПЕРЕМЕЩЕНИИ
-            TPoint snappedPos = SnapToGridPoint(TPoint(newLeft, newTop));
-            newLeft = snappedPos.X;
-            newTop = snappedPos.Y;
+		// Привязка к сетке
+		TPoint snappedPos = SnapToGridPoint(TPoint(newLeft, newTop));
+		newLeft = snappedPos.X;
+		newTop = snappedPos.Y;
 
-            TRect newBounds = TRect(
-                newLeft,
-                newTop,
-                newLeft + FDraggedElement->Bounds.Width(),
-                newTop + FDraggedElement->Bounds.Height()
-            );
+		TRect newBounds = TRect(
+			newLeft,
+			newTop,
+			newLeft + FDraggedElement->Bounds.Width(),
+			newTop + FDraggedElement->Bounds.Height()
+		);
 
-            FDraggedElement->SetBounds(newBounds);
-            if (currentTab->PaintBox) {
-                currentTab->PaintBox->Repaint();
-            }
+		FDraggedElement->SetBounds(newBounds);
+		// ПРИНУДИТЕЛЬНЫЙ ПЕРЕСЧЕТ ТОЧЕК СОЕДИНЕНИЯ
+		FDraggedElement->CalculateRelativePositions();
 
-            lastX = logicalPos.X;
-            lastY = logicalPos.Y;
-        }
+		if (currentTab->PaintBox) {
+			currentTab->PaintBox->Repaint();
+		}
+
+		lastX = logicalPos.X;
+		lastY = logicalPos.Y;
+		}
 	}
 
     else if (FIsSelecting) {
@@ -2294,7 +2308,8 @@ bool TMainForm::IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex
 TPoint TMainForm::SnapToGridPoint(const TPoint& Point) {
     if (!FSnapToGrid) return Point;
 
-    int gridSize = 20; // Размер сетки
+    int gridSize = 20;
+    // Правильная привязка с округлением до ближайшей сетки
     int snappedX = ((Point.X + gridSize/2) / gridSize) * gridSize;
     int snappedY = ((Point.Y + gridSize/2) / gridSize) * gridSize;
 
@@ -2305,30 +2320,23 @@ TPoint TMainForm::SnapToGridPoint(const TPoint& Point) {
 std::vector<TPoint> TMainForm::CalculateRectangularPath(const TPoint& Start, const TPoint& End) {
     std::vector<TPoint> path;
 
-	TPoint snappedStart = SnapToGridPoint(Start);
-	TPoint snappedEnd = SnapToGridPoint(End);
-
-    // Вычисляем среднюю точку по X с привязкой к сетке
-    int midX = (snappedStart.X + snappedEnd.X) / 2;
-    midX = SnapToGridPoint(TPoint(midX, 0)).X;
+    // Используем точные координаты точек (они уже привязаны к сетке)
+    TPoint snappedStart = Start;
+    TPoint snappedEnd = End;
 
     path.push_back(snappedStart);
-    path.push_back(TPoint(snappedStart.X, snappedStart.Y));
-    path.push_back(TPoint(snappedStart.X, (snappedStart.Y + snappedEnd.Y) / 2));
-    path.push_back(TPoint(midX, (snappedStart.Y + snappedEnd.Y) / 2));
-    path.push_back(TPoint(midX, snappedEnd.Y));
-    path.push_back(TPoint(snappedEnd.X, snappedEnd.Y));
+
+    // Горизонтальный отрезок от начальной точки
+    int firstX = snappedStart.X + (snappedEnd.X > snappedStart.X ? 40 : -40);
+    path.push_back(TPoint(firstX, snappedStart.Y));
+
+    // Вертикальный отрезок к уровню конечной точки
+    path.push_back(TPoint(firstX, snappedEnd.Y));
+
+    // Горизонтальный отрезок к конечной точке
     path.push_back(snappedEnd);
 
-    // Упрощаем путь, удаляя соседние дубликаты
-    std::vector<TPoint> simplifiedPath;
-    for (size_t i = 0; i < path.size(); i++) {
-        if (i == 0 || path[i].X != path[i-1].X || path[i].Y != path[i-1].Y) {
-            simplifiedPath.push_back(path[i]);
-        }
-    }
-
-    return simplifiedPath;
+    return path;
 }
 
 // Отрисовка прямоугольного соединения
