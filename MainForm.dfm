@@ -2,8 +2,8 @@ object MainForm: TMainForm
   Left = 0
   Top = 0
   Caption = 'Setun IDE - '#1058#1088#1086#1080#1095#1085#1072#1103' '#1083#1086#1075#1080#1082#1072' '#1087#1086' '#1082#1085#1080#1075#1077' 1965 '#1075#1086#1076#1072
-  ClientHeight = 700
-  ClientWidth = 1000
+  ClientHeight = 699
+  ClientWidth = 996
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -20,11 +20,10 @@ object MainForm: TMainForm
   object ToolPanel: TPanel
     Left = 0
     Top = 0
-    Width = 1000
+    Width = 996
     Height = 30
     Align = alTop
     TabOrder = 0
-    ExplicitWidth = 996
     object btnConnectionMode: TSpeedButton
       Left = 250
       Top = 0
@@ -67,7 +66,7 @@ object MainForm: TMainForm
     Left = 0
     Top = 30
     Width = 250
-    Height = 652
+    Height = 651
     Align = alLeft
     TabOrder = 1
     ExplicitHeight = 631
@@ -113,7 +112,7 @@ object MainForm: TMainForm
       Left = 1
       Top = 54
       Width = 248
-      Height = 597
+      Height = 596
       Align = alClient
       ItemHeight = 13
       TabOrder = 1
@@ -123,11 +122,10 @@ object MainForm: TMainForm
   object WorkspacePanel: TPanel
     Left = 250
     Top = 30
-    Width = 750
-    Height = 652
+    Width = 746
+    Height = 651
     Align = alClient
     TabOrder = 2
-    ExplicitWidth = 746
     ExplicitHeight = 631
     object SchemePageControl: TPageControl
       Left = 1
@@ -135,24 +133,24 @@ object MainForm: TMainForm
       Width = 748
       Height = 650
       Align = alClient
+      OwnerDraw = True
       PopupMenu = TabPopupMenu
       TabOrder = 0
       OnChange = SchemePageControlChange
+      OnDrawTab = SchemePageControlDrawTab
       ExplicitWidth = 744
       ExplicitHeight = 629
     end
   end
   object StatusBar: TStatusBar
     Left = 0
-    Top = 682
-    Width = 1000
+    Top = 681
+    Width = 996
     Height = 18
     Panels = <
       item
         Width = 800
       end>
-    ExplicitTop = 681
-    ExplicitWidth = 996
   end
   object ElementPopupMenu: TPopupMenu
     Left = 400
@@ -252,8 +250,20 @@ object MainForm: TMainForm
         OnClick = btnZoomFitClick
       end
     end
+    object miOptions: TMenuItem
+      Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
+      object miRectangularConnections: TMenuItem
+        Caption = #1055#1088#1103#1084#1086#1091#1075#1086#1083#1100#1085#1099#1077' '#1089#1086#1077#1076#1080#1085#1077#1085#1080#1103
+        OnClick = miRectangularConnectionsClick
+      end
+      object miSnapToGrid: TMenuItem
+        Caption = #1055#1088#1080#1074#1103#1079#1082#1072' '#1082' '#1089#1077#1090#1082#1077
+        Checked = True
+        OnClick = miSnapToGridClick
+      end
+    end
     object miSimulation: TMenuItem
-      Caption = #1057#1080#1084#1091#1083#1103#1094#1080#1100
+      Caption = #1057#1080#1084#1091#1083#1103#1094#1080#1103
       object miRun: TMenuItem
         Caption = #1047#1072#1087#1091#1089#1090#1080#1090#1100
         ShortCut = 120

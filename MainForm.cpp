@@ -73,12 +73,10 @@ void TSubCircuit::CreateExternalConnections() {
     FInputs.clear();
     FOutputs.clear();
 
-    // Собираем все точки соединений, которые должны стать внешними
     std::vector<const TConnectionPoint*> externalInputs;
     std::vector<const TConnectionPoint*> externalOutputs;
 
     for (const auto& element : FInternalElements) {
-        // Проверяем входы
         for (const auto& input : element->Inputs) {
             bool isInternal = false;
             for (const auto& conn : FInternalConnections) {
@@ -92,7 +90,6 @@ void TSubCircuit::CreateExternalConnections() {
             }
         }
 
-        // Проверяем выходы
         for (const auto& output : element->Outputs) {
             bool isInternal = false;
             for (const auto& conn : FInternalConnections) {
@@ -107,7 +104,6 @@ void TSubCircuit::CreateExternalConnections() {
         }
     }
 
-    // Создаем внешние входы
     int inputSpacing = FBounds.Height() / (externalInputs.size() + 1);
     for (size_t i = 0; i < externalInputs.size(); i++) {
         int y = FBounds.Top + inputSpacing * (i + 1);
@@ -115,7 +111,6 @@ void TSubCircuit::CreateExternalConnections() {
             TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     }
 
-    // Создаем внешние выходы
     int outputSpacing = FBounds.Height() / (externalOutputs.size() + 1);
     for (size_t i = 0; i < externalOutputs.size(); i++) {
         int y = FBounds.Top + outputSpacing * (i + 1);
@@ -123,7 +118,6 @@ void TSubCircuit::CreateExternalConnections() {
             TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
     }
 
-    // Если нет внешних соединений, создаем по одному входу и выходу
     if (FInputs.empty()) {
         FInputs.push_back(TConnectionPoint(this, FBounds.Left - 15, FBounds.Top + FBounds.Height()/2 - 10,
             TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
@@ -146,11 +140,9 @@ void TSubCircuit::UpdateExternalConnections() {
     }
 }
 
-// Методы сериализации TSubCircuit
 void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
     TCircuitElement::SaveToIni(IniFile, Section);
 
-    // Сохраняем внутренние элементы
     IniFile->WriteInteger(Section, "InternalElementCount", static_cast<int>(FInternalElements.size()));
 
     for (int i = 0; i < FInternalElements.size(); i++) {
@@ -158,7 +150,6 @@ void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
         MainForm->SaveElementToIni(FInternalElements[i].get(), IniFile, internalSection);
     }
 
-    // Сохраняем внутренние соединения
     IniFile->WriteInteger(Section, "InternalConnectionCount", static_cast<int>(FInternalConnections.size()));
 
     for (int i = 0; i < FInternalConnections.size(); i++) {
@@ -175,7 +166,6 @@ void TSubCircuit::SaveToIni(TIniFile* IniFile, const String& Section) const {
 void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
     TCircuitElement::LoadFromIni(IniFile, Section);
 
-    // Загружаем внутренние элементы
     int internalElementCount = IniFile->ReadInteger(Section, "InternalElementCount", 0);
 
     for (int i = 0; i < internalElementCount; i++) {
@@ -187,7 +177,6 @@ void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
         }
     }
 
-    // Загружаем внутренние соединения
     int internalConnCount = IniFile->ReadInteger(Section, "InternalConnectionCount", 0);
 
     for (int i = 0; i < internalConnCount; i++) {
@@ -197,7 +186,6 @@ void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
         TConnectionPoint* toPoint = MainForm->LoadConnectionPoint(IniFile, connSection, "To", this);
 
         if (fromPoint && toPoint) {
-            // Находим реальные точки во внутренних элементах
             TConnectionPoint* realFromPoint = FindConnectionPointInInternalElements(fromPoint);
             TConnectionPoint* realToPoint = FindConnectionPointInInternalElements(toPoint);
 
@@ -210,7 +198,6 @@ void TSubCircuit::LoadFromIni(TIniFile* IniFile, const String& Section) {
         }
     }
 
-    // Обновляем внешние соединения
     CreateExternalConnections();
 }
 
@@ -240,38 +227,33 @@ TConnectionPoint* TSubCircuit::FindConnectionPointInInternalElements(const TConn
 
     return nullptr;
 }
-
 // Конструктор MainForm
-__fastcall TMainForm::TMainForm(TComponent* Owner)
-    : TForm(Owner),
+__fastcall TMainForm::TMainForm(TComponent* Owner) : TForm(Owner),
     FSelectedElement(nullptr), FDraggedElement(nullptr), FConnectionStart(nullptr),
     FIsConnecting(false), FIsDragging(false), FIsSelecting(false),
     FNextElementId(1), FDragOffsetX(0), FDragOffsetY(0), FZoomFactor(1.0),
-    FScrollOffsetX(0), FScrollOffsetY(0), FSimulationRunning(false), FSimulationStep(0), FHotCloseTabIndex(-1) {
+    FScrollOffsetX(0), FScrollOffsetY(0), FSimulationRunning(false), FSimulationStep(0),
+    FHotCloseTabIndex(-1), FRectangularConnections(false), FSnapToGrid(true), FIsDrawingWire(false), FWireStartPoint(nullptr) {
 
-    // Включаем двойную буферизацию
     DoubleBuffered = true;
-
-    // Инициализируем скроллбары
     WorkspacePanel->DoubleBuffered = true;
-
+    miRectangularConnections->Checked = true;
     KeyPreview = true;
 
-    // Настраиваем отрисовку вкладок с крестиками
     SchemePageControl->OwnerDraw = true;
     SchemePageControl->OnDrawTab = SchemePageControlDrawTab;
-	SchemePageControl->OnMouseDown = SchemePageControlMouseDown;
+    SchemePageControl->OnMouseDown = SchemePageControlMouseDown;
     SchemePageControl->OnMouseMove = SchemePageControlMouseMove;
 
+    SchemePageControl->TabWidth = 120;
+    SchemePageControl->TabHeight = 21;
 
-    // Инициализируем таймер симуляции
     FSimulationTimer = new TTimer(this);
-    FSimulationTimer->Interval = 500; // 0.5 секунды
+    FSimulationTimer->Interval = 500;
     FSimulationTimer->OnTimer = &SimulationTimerTimer;
     FSimulationTimer->Enabled = false;
 }
 
-// Новые методы для преобразования координат
 TPoint TMainForm::ScreenToLogical(const TPoint& screenPoint) const {
     return TPoint(
         static_cast<int>(screenPoint.X / FZoomFactor),
@@ -293,12 +275,10 @@ TRect TMainForm::LogicalToScreen(const TRect& logicalRect) const {
     );
 }
 
-// Новые методы для размещения элементов
 TPoint TMainForm::GetVisibleAreaCenter() const {
     TTabData* currentTab = GetCurrentTabData();
     if (!currentTab || !currentTab->ScrollBox) return TPoint(400, 300);
 
-    // Получаем видимую область в логических координатах
     int logicalLeft = currentTab->ScrollBox->HorzScrollBar->Position / FZoomFactor;
     int logicalTop = currentTab->ScrollBox->VertScrollBar->Position / FZoomFactor;
     int logicalRight = (currentTab->ScrollBox->HorzScrollBar->Position + currentTab->ScrollBox->ClientWidth) / FZoomFactor;
@@ -316,9 +296,14 @@ bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
 
     int originalX = x;
     int originalY = y;
-    int step = 40; // шаг смещения в логических пикселях
+    int gridSize = 20; // Размер сетки
+    int step = gridSize * 2; // шаг смещения в логических пикселях
 
     for (int attempt = 0; attempt < 50; attempt++) {
+        // ПРИВЯЗКА К СЕТКЕ ПРИ ПОИСКЕ МЕСТА
+        x = ((x + gridSize/2) / gridSize) * gridSize;
+        y = ((y + gridSize/2) / gridSize) * gridSize;
+
         TRect newRect(x, y, x + width, y + height);
         bool collision = false;
 
@@ -334,7 +319,7 @@ bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
             return true; // Нашли свободное место
         }
 
-        // Сдвигаем по спирали от центра
+        // Сдвигаем по спирали от центра с привязкой к сетке
         int ring = (attempt / 4) + 1;
         switch (attempt % 4) {
             case 0: x = originalX + ring * step; break;  // вправо
@@ -344,34 +329,47 @@ bool TMainForm::FindFreeLocation(int& x, int& y, int width, int height) {
         }
     }
 
-    // Если не нашли свободное место, оставляем исходную позицию
+    // Если не нашли свободное место, используем исходную позицию с привязкой
+    x = ((originalX + gridSize/2) / gridSize) * gridSize;
+    y = ((originalY + gridSize/2) / gridSize) * gridSize;
     return false;
 }
 
 TPoint TMainForm::GetBestPlacementPosition(int width, int height) {
     TPoint visibleCenter = GetVisibleAreaCenter();
 
-    int x = visibleCenter.X - width / 2;
-    int y = visibleCenter.Y - height / 2;
+    int gridSize = 20;
+    int x = ((visibleCenter.X - width / 2) / gridSize) * gridSize;
+    int y = ((visibleCenter.Y - height / 2) / gridSize) * gridSize;
 
-    // Если центр занят, ищем свободное место вокруг
     if (!FindFreeLocation(x, y, width, height)) {
-        // Если не нашли свободное место, используем центр
-        x = visibleCenter.X - width / 2;
-        y = visibleCenter.Y - height / 2;
+        for (int attempt = 0; attempt < 50; attempt++) {
+            int ring = (attempt / 4) + 1;
+            switch (attempt % 4) {
+                case 0: x = visibleCenter.X + ring * gridSize * 2; break;
+                case 1: y = visibleCenter.Y + ring * gridSize * 2; break;
+                case 2: x = visibleCenter.X - ring * gridSize * 2; break;
+                case 3: y = visibleCenter.Y - ring * gridSize * 2; break;
+            }
+
+            x = (x / gridSize) * gridSize;
+            y = (y / gridSize) * gridSize;
+
+            if (FindFreeLocation(x, y, width, height)) {
+                break;
+            }
+        }
     }
 
     return TPoint(x, y);
 }
 
-// Метод для удаления выделенных элементов
 void TMainForm::DeleteSelectedElements() {
     TTabData* currentTab = GetCurrentTabData();
     if (!currentTab || FSelectedElements.empty()) return;
 
     std::vector<TCircuitElement*> elementsToDelete = FSelectedElements;
 
-    // Удаляем соединения, связанные с выделенными элементами
     auto it = currentTab->Connections.begin();
     while (it != currentTab->Connections.end()) {
         bool shouldRemove = false;
@@ -388,7 +386,6 @@ void TMainForm::DeleteSelectedElements() {
         }
     }
 
-    // Удаляем элементы из вектора
     for (auto* elementToDelete : elementsToDelete) {
         auto elemIt = std::find_if(currentTab->Elements.begin(), currentTab->Elements.end(),
             [elementToDelete](const std::unique_ptr<TCircuitElement>& elem) {
@@ -400,30 +397,22 @@ void TMainForm::DeleteSelectedElements() {
         }
     }
 
-    // Очищаем выделение
     FSelectedElements.clear();
     FSelectedElement = nullptr;
 
     UpdatePaintBoxSize();
-    // Перерисовываем текущую вкладку
     if (currentTab->PaintBox) {
         currentTab->PaintBox->Repaint();
     }
     StatusBar->Panels->Items[0]->Text = "Удалено элементов: " + IntToStr(static_cast<int>(elementsToDelete.size()));
 }
 
-// Обработчик нажатия клавиш
 void __fastcall TMainForm::FormKeyDown(TObject *Sender, WORD &Key, TShiftState Shift) {
     if (Key == VK_DELETE) {
         DeleteSelectedElements();
         Key = 0;
     }
 }
-
-// ============================================================================
-// МЕТОДЫ АВТОМАТИЧЕСКОЙ ЗАГРУЗКИ DLL
-// ============================================================================
-
 void TMainForm::LoadAllLibraries() {
     String currentDir = GetCurrentDir();
     String searchPattern = currentDir + "\\*.dll";
@@ -440,7 +429,6 @@ void TMainForm::LoadAllLibraries() {
     int totalCount = 0;
 
     do {
-        // Пропускаем папки
         if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             continue;
         }
@@ -450,7 +438,6 @@ void TMainForm::LoadAllLibraries() {
 
         totalCount++;
 
-        // Пытаемся загрузить библиотеку
         if (LoadLibraryFromDLL(dllPath)) {
             loadedCount++;
             StatusBar->Panels->Items[0]->Text = "Загружена библиотека: " + dllFileName;
@@ -463,21 +450,17 @@ void TMainForm::LoadAllLibraries() {
     String resultMsg = "Загружено библиотек: " + IntToStr(loadedCount) + " из " + IntToStr(totalCount);
     StatusBar->Panels->Items[0]->Text = resultMsg;
 
-    // Обновляем список библиотек в интерфейсе
     UpdateLibrarySelector();
 }
 
 void TMainForm::UnloadAllLibraries() {
-    // Выгружаем библиотеки в обратном порядке (для корректности зависимостей)
     for (auto it = FLoadedLibraries.rbegin(); it != FLoadedLibraries.rend(); ++it) {
         TLoadedLibrary& lib = *it;
 
-        // Вызываем функцию выгрузки, если она есть
         if (lib.UnregisterFunc) {
             lib.UnregisterFunc(FLibraryManager.get());
         }
 
-        // Выгружаем DLL
         if (lib.Handle) {
             FreeLibrary(lib.Handle);
         }
@@ -487,7 +470,6 @@ void TMainForm::UnloadAllLibraries() {
 }
 
 bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
-    // Пропускаем системные и известные DLL, которые не должны быть загружены
     String fileName = ExtractFileName(DllPath).LowerCase();
     if (fileName == "vcl.dll" || fileName == "rtl.dll" ||
         fileName.Pos("borland") > 0 || fileName.Pos("bpl") > 0) {
@@ -500,7 +482,6 @@ bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
         return false;
     }
 
-    // Ищем функцию регистрации
     TRegisterLibraryFunction registerFunc = FindRegisterFunction(libraryHandle);
 
     if (!registerFunc) {
@@ -508,11 +489,9 @@ bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
         return false;
     }
 
-    // Ищем функцию выгрузки
     TUnregisterLibraryFunction unregisterFunc = FindUnregisterFunction(libraryHandle);
 
     try {
-        // Регистрируем библиотеку
         bool success = registerFunc(FLibraryManager.get());
 
         if (!success) {
@@ -520,13 +499,11 @@ bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
             return false;
         }
 
-        // Сохраняем информацию о библиотеке
         TLoadedLibrary loadedLib;
         loadedLib.Handle = libraryHandle;
         loadedLib.FileName = ExtractFileName(DllPath);
         loadedLib.UnregisterFunc = unregisterFunc;
 
-        // Получаем имя библиотеки (если доступно)
         typedef const char* (__stdcall *TGetLibraryNameFunction)();
         TGetLibraryNameFunction getNameFunc = reinterpret_cast<TGetLibraryNameFunction>(
             GetProcAddress(libraryHandle, "GetLibraryName"));
@@ -547,11 +524,10 @@ bool TMainForm::LoadLibraryFromDLL(const String& DllPath) {
 }
 
 TRegisterLibraryFunction TMainForm::FindRegisterFunction(HINSTANCE LibraryHandle) {
-    // Список возможных имен функции регистрации (для совместимости)
     const char* functionNames[] = {
-        "RegisterLibrary",           // Новый стандарт
-        "RegisterStandardLibrary",   // Старый стандарт
-        "_RegisterLibrary@4",        // Декорированное имя (x86)
+        "RegisterLibrary",
+        "RegisterStandardLibrary",
+        "_RegisterLibrary@4",
         "_RegisterStandardLibrary@4",
         "RegisterLibrary@4",
         "RegisterStandardLibrary@4"
@@ -567,7 +543,6 @@ TRegisterLibraryFunction TMainForm::FindRegisterFunction(HINSTANCE LibraryHandle
 }
 
 TUnregisterLibraryFunction TMainForm::FindUnregisterFunction(HINSTANCE LibraryHandle) {
-    // Список возможных имен функции выгрузки
     const char* functionNames[] = {
         "UnregisterLibrary",
         "UnregisterStandardLibrary",
@@ -587,25 +562,18 @@ TUnregisterLibraryFunction TMainForm::FindUnregisterFunction(HINSTANCE LibraryHa
 }
 
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
-    // Инициализируем менеджер библиотек
     FLibraryManager = std::make_unique<TLibraryManager>();
-
-    // Создаем встроенную базовую библиотеку
     CreateBasicLibrary();
-
-    // Автоматически загружаем все DLL из папки приложения
     LoadAllLibraries();
 
     CreateCompleteLibrary();
 
-    // Создаем основную вкладку
     TTabSheet* mainTab = CreateNewTab("Основная схема");
     SchemePageControl->ActivePage = mainTab;
 
     btnConnectionMode->AllowAllUp = true;
     btnConnectionMode->GroupIndex = 1;
 
-    // Инициализируем селектор библиотек
     UpdateLibrarySelector();
 
     StatusBar->Panels->Items[0]->Text = "Готов к работе. Выберите элемент из библиотеки или режим соединения.";
@@ -613,10 +581,8 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
 }
 
 void TMainForm::CreateBasicLibrary() {
-    // Создаем встроенную базовую библиотеку
     FBasicLibrary = std::make_unique<TComponentLibrary>("Basic", "Базовая библиотека элементов", "1.0");
 
-    // Регистрируем базовые элементы с простыми именами
     FBasicLibrary->RegisterElement<TMagneticAmplifier>("Магнитный усилитель", "Простой магнитный усилитель", "Усилители");
     FBasicLibrary->RegisterElement<TTernaryElement>("Троичный элемент", "Базовый троичный элемент", "Логика");
     FBasicLibrary->RegisterElement<TShiftRegister>("Сдвигающий регистр", "4-битный сдвигающий регистр", "Память");
@@ -630,27 +596,20 @@ void TMainForm::CreateBasicLibrary() {
     FBasicLibrary->RegisterElement<TLogicInhibit>("Запрет", "Схема запрета", "Логика");
     FBasicLibrary->RegisterElement<TGenerator>("Генератор", "Генератор единиц", "Источники");
 
-    // Регистрируем библиотеку в менеджере
     FLibraryManager->RegisterLibrary(std::move(FBasicLibrary));
 }
 
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
-    // Останавливаем симуляцию
     FSimulationTimer->Enabled = false;
 
-    // Сначала очищаем элементы и соединения
     FElements.clear();
     FConnections.clear();
     FSelectedElements.clear();
 
-    // Затем освобождаем библиотеки
     FLibraryManager.reset();
-
-    // И только потом выгружаем все DLL
     UnloadAllLibraries();
 }
 
-// Новые методы для создания элементов через библиотеки
 std::unique_ptr<TCircuitElement> TMainForm::CreateElement(const String& LibraryName, const String& ElementName, int X, int Y) {
     try {
         if (!FLibraryManager) {
@@ -753,6 +712,13 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
 
     String elementName = ElementLibrary->Items->Strings[ElementLibrary->ItemIndex];
 
+    // Проверяем режим только для чтения
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->IsReadOnly) {
+        StatusBar->Panels->Items[0]->Text = "Режим просмотра: добавление элементов запрещено";
+        return;
+    }
+
     // Создаем элемент временно в (0,0) чтобы получить его размеры
     auto newElement = CreateElementFromCurrent(elementName, 0, 0);
     if (!newElement) {
@@ -766,11 +732,13 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
     // Получаем оптимальную позицию для размещения
     TPoint bestPos = GetBestPlacementPosition(width, height);
 
+    // ПРИВЯЗКА К СЕТКЕ: убедимся, что позиция привязана к сетке
+    bestPos = SnapToGridPoint(bestPos);
+
     // Устанавливаем новые границы
     newElement->SetBounds(TRect(bestPos.X, bestPos.Y, bestPos.X + width, bestPos.Y + height));
     newElement->CalculateRelativePositions();
 
-    TTabData* currentTab = GetCurrentTabData();
     if (currentTab) {
         currentTab->Elements.push_back(std::move(newElement));
         UpdatePaintBoxSize();
@@ -780,6 +748,7 @@ void __fastcall TMainForm::ElementLibraryDblClick(TObject *Sender) {
         StatusBar->Panels->Items[0]->Text = "Добавлен: " + elementName;
     }
 }
+
 
 // Новая реализация сериализации для сохранения схемы
 void TMainForm::SaveSchemeToFile(const String& FileName, TTabData* TabData) {
@@ -995,6 +964,12 @@ TConnectionPoint* TMainForm::FindConnectionPointInElement(TCircuitElement* eleme
 }
 
 void __fastcall TMainForm::miDeleteElementClick(TObject *Sender) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->IsReadOnly) {
+        StatusBar->Panels->Items[0]->Text = "Режим просмотра: удаление элементов запрещено";
+        return;
+    }
+
     DeleteSelectedElements();
 }
 
@@ -1059,44 +1034,49 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData) {
     canvas->FillRect(TabData->PaintBox->ClientRect);
 
     // Статическая переменная для отслеживания изменения масштаба
-    static double lastZoomFactor = 0;
-
-    // Сетка рисуется только при изменении масштаба
-    if (lastZoomFactor != FZoomFactor) {
-        canvas->Pen->Color = clSilver;
-        canvas->Pen->Style = psDot;
-        int gridSize = static_cast<int>(20 * FZoomFactor);
-        if (gridSize > 2) {
-            for (int x = 0; x < TabData->PaintBox->Width; x += gridSize) {
-                canvas->MoveTo(x, 0);
-                canvas->LineTo(x, TabData->PaintBox->Height);
-            }
-            for (int y = 0; y < TabData->PaintBox->Height; y += gridSize) {
-                canvas->MoveTo(0, y);
-                canvas->LineTo(TabData->PaintBox->Width, y);
-            }
+    canvas->Pen->Color = clSilver;
+    canvas->Pen->Style = psDot;
+    int gridSize = static_cast<int>(20 * FZoomFactor);
+    if (gridSize > 2) {
+        for (int x = 0; x < TabData->PaintBox->Width; x += gridSize) {
+            canvas->MoveTo(x, 0);
+            canvas->LineTo(x, TabData->PaintBox->Height);
         }
-        canvas->Pen->Style = psSolid;
-        lastZoomFactor = FZoomFactor;
+        for (int y = 0; y < TabData->PaintBox->Height; y += gridSize) {
+            canvas->MoveTo(0, y);
+            canvas->LineTo(TabData->PaintBox->Width, y);
+        }
     }
+    canvas->Pen->Style = psSolid;
 
     // Соединения
     canvas->Pen->Width = static_cast<int>(2 * FZoomFactor);
-    for (auto& connection : TabData->Connections) {
-        TConnectionPoint* start = connection.first;
-        TConnectionPoint* end = connection.second;
+// В блоке отрисовки соединений ДОБАВЬТЕ привязку координат:
+for (auto& connection : TabData->Connections) {
+    TConnectionPoint* start = connection.first;
+    TConnectionPoint* end = connection.second;
 
-        canvas->Pen->Color = TernaryToColor(start->Value);
+    TColor connectionColor = TernaryToColor(start->Value);
 
-        TPoint screenStart = LogicalToScreen(TPoint(start->X, start->Y));
-        TPoint screenEnd = LogicalToScreen(TPoint(end->X, end->Y));
+    // ПРИВЯЗКА КООРДИНАТ ТОЧЕК К СЕТКЕ
+    TPoint logicalStart = SnapToGridPoint(TPoint(start->X, start->Y));
+    TPoint logicalEnd = SnapToGridPoint(TPoint(end->X, end->Y));
 
-        // Учитываем смещение скролла
-        if (TabData->ScrollBox) {
-            screenStart.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
-            screenEnd.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
-        }
+    TPoint screenStart = LogicalToScreen(logicalStart);
+    TPoint screenEnd = LogicalToScreen(logicalEnd);
 
+    // Учитываем смещение скролла
+    if (TabData->ScrollBox) {
+        screenStart.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+        screenEnd.Offset(-TabData->ScrollBox->HorzScrollBar->Position, -TabData->ScrollBox->VertScrollBar->Position);
+    }
+
+    if (FRectangularConnections) {
+        // Прямоугольное соединение
+        DrawRectangularConnection(canvas, screenStart, screenEnd, connectionColor);
+    } else {
+        // Прямое соединение
+        canvas->Pen->Color = connectionColor;
         canvas->MoveTo(screenStart.X, screenStart.Y);
         canvas->LineTo(screenEnd.X, screenEnd.Y);
 
@@ -1117,7 +1097,42 @@ void TMainForm::OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData) {
             canvas->LineTo(arrowX + static_cast<int>(unitY * arrowSize/2), arrowY - static_cast<int>(unitX * arrowSize/2));
         }
     }
+}
     canvas->Pen->Width = 1;
+
+    // Рисование текущего провода - ИСПРАВЛЕННАЯ СЕКЦИЯ
+    if (FIsDrawingWire && FCurrentWirePoints.size() > 0) {
+        canvas->Pen->Color = clBlue;
+        canvas->Pen->Style = psDash;
+        canvas->Pen->Width = 2;
+
+        // Преобразуем логические координаты в экранные
+        std::vector<TPoint> screenPoints;
+        for (const auto& point : FCurrentWirePoints) {
+            TPoint screenPoint = LogicalToScreen(point);
+            if (TabData->ScrollBox) {
+                screenPoint.Offset(-TabData->ScrollBox->HorzScrollBar->Position,
+                                  -TabData->ScrollBox->VertScrollBar->Position);
+            }
+            screenPoints.push_back(screenPoint);
+        }
+
+        // Рисуем ломаную линию
+        if (screenPoints.size() > 0) {
+            canvas->MoveTo(screenPoints[0].X, screenPoints[0].Y);
+            for (size_t i = 1; i < screenPoints.size(); i++) {
+                canvas->LineTo(screenPoints[i].X, screenPoints[i].Y);
+            }
+
+            // Рисуем текущую позицию мыши
+            TPoint mousePos = TabData->PaintBox->ScreenToClient(Mouse->CursorPos);
+            canvas->LineTo(mousePos.X, mousePos.Y);
+        }
+
+        canvas->Pen->Style = psSolid;
+        canvas->Pen->Width = 1;
+    }
+
 
     // Элементы - рисуем в логических координатах с учетом масштаба и смещения
     for (auto& element : TabData->Elements) {
@@ -1192,7 +1207,6 @@ TColor TMainForm::TernaryToColor(TTernary Value) {
         default: return clBlack;
     }
 }
-
 // ИСПРАВЛЕННАЯ СИГНАТУРА - добавлен const для MousePos
 void __fastcall TMainForm::WorkspaceMouseWheel(TObject *Sender, TShiftState Shift,
     int WheelDelta, const TPoint &MousePos, bool &Handled) {
@@ -1226,6 +1240,12 @@ void __fastcall TMainForm::CircuitImageMouseDown(TObject *Sender, TMouseButton B
 
     TTabData* currentTab = GetCurrentTabData();
     if (!currentTab || !currentTab->ScrollBox) return;
+
+    // Проверяем режим только для чтения
+    if (currentTab->IsReadOnly) {
+        StatusBar->Panels->Items[0]->Text = "Режим просмотра: редактирование запрещено";
+        return;
+    }
 
     // Преобразуем экранные координаты в логические
     TPoint logicalPos = ScreenToLogical(TPoint(
@@ -1382,6 +1402,11 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
             int newLeft = logicalPos.X - FDragOffsetX;
             int newTop = logicalPos.Y - FDragOffsetY;
 
+            // ПРИВЯЗКА К СЕТКЕ ПРИ ПЕРЕМЕЩЕНИИ
+            TPoint snappedPos = SnapToGridPoint(TPoint(newLeft, newTop));
+            newLeft = snappedPos.X;
+            newTop = snappedPos.Y;
+
             TRect newBounds = TRect(
                 newLeft,
                 newTop,
@@ -1397,7 +1422,8 @@ void __fastcall TMainForm::CircuitImageMouseMove(TObject *Sender, TShiftState Sh
             lastX = logicalPos.X;
             lastY = logicalPos.Y;
         }
-    }
+	}
+
     else if (FIsSelecting) {
         FSelectionRect.Right = X;
         FSelectionRect.Bottom = Y;
@@ -1569,6 +1595,13 @@ void TMainForm::ResetSimulation() {
 }
 
 void __fastcall TMainForm::btnConnectionModeClick(TObject *Sender) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->IsReadOnly) {
+        StatusBar->Panels->Items[0]->Text = "Режим просмотра: создание соединений запрещено";
+        btnConnectionMode->Down = false;
+        return;
+    }
+
     if (btnConnectionMode->Down) {
         StatusBar->Panels->Items[0]->Text = "Режим соединения: выбирайте точки для соединения элементов.";
         TTabData* currentTab = GetCurrentTabData();
@@ -1615,6 +1648,12 @@ void TMainForm::ShowElementProperties(TCircuitElement* Element) {
 }
 
 void __fastcall TMainForm::miRotateElementClick(TObject *Sender) {
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->IsReadOnly) {
+        StatusBar->Panels->Items[0]->Text = "Режим просмотра: вращение элементов запрещено";
+        return;
+    }
+
     if (FSelectedElement) {
         TRect newBounds = FSelectedElement->Bounds;
         int width = newBounds.Width();
@@ -1632,7 +1671,6 @@ void __fastcall TMainForm::miRotateElementClick(TObject *Sender) {
         StatusBar->Panels->Items[0]->Text = "Элемент повернут.";
     }
 }
-
 void __fastcall TMainForm::btnZoomInClick(TObject *Sender) {
     FZoomFactor *= 1.2;
     if (FZoomFactor > 5.0) FZoomFactor = 5.0;
@@ -1753,9 +1791,9 @@ TRect TMainForm::GetCircuitBounds() {
 TTabSheet* TMainForm::CreateNewTab(const String& Title, TSubCircuit* SubCircuit) {
     TTabSheet* newTab = new TTabSheet(SchemePageControl);
     newTab->PageControl = SchemePageControl;
-	newTab->Caption = Title;
+    newTab->Caption = Title;
 
-	// Создаем контейнер для данных вкладки
+    // Создаем контейнер для данных вкладки
     TTabData* tabData = new TTabData();
     tabData->ScrollBox = new TScrollBox(newTab);
     tabData->ScrollBox->Parent = newTab;
@@ -1777,50 +1815,71 @@ TTabSheet* TMainForm::CreateNewTab(const String& Title, TSubCircuit* SubCircuit)
         const auto& internalElements = SubCircuit->GetInternalElements();
         const auto& internalConnections = SubCircuit->GetInternalConnections();
 
-        // Копируем элементы (необходимо глубокое копирование, но для простоты используем существующие)
-        // В реальной реализации нужно реализовать клонирование элементов
+        // Создаем карту для соответствия старых указателей на новые элементы
+        std::map<TCircuitElement*, TCircuitElement*> elementMap;
+
+        // Копируем элементы
         for (const auto& element : internalElements) {
             // Создаем копию элемента
             auto newElement = CreateElementByClassName(element->GetClassName(), tabData->NextElementId++,
                                                      element->Bounds.Left, element->Bounds.Top);
             if (newElement) {
                 newElement->SetBounds(element->Bounds);
+
                 // Копируем состояние
                 newElement->SetCurrentState(element->CurrentState);
+
                 // Копируем входы и выходы
                 for (size_t i = 0; i < std::min(element->Inputs.size(), newElement->Inputs.size()); ++i) {
                     newElement->Inputs[i].Value = element->Inputs[i].Value;
+                    newElement->Inputs[i].RelX = element->Inputs[i].RelX;
+                    newElement->Inputs[i].RelY = element->Inputs[i].RelY;
                 }
                 for (size_t i = 0; i < std::min(element->Outputs.size(), newElement->Outputs.size()); ++i) {
                     newElement->Outputs[i].Value = element->Outputs[i].Value;
+                    newElement->Outputs[i].RelX = element->Outputs[i].RelX;
+                    newElement->Outputs[i].RelY = element->Outputs[i].RelY;
                 }
+
+                // Сохраняем соответствие
+                elementMap[element.get()] = newElement.get();
                 tabData->Elements.push_back(std::move(newElement));
             }
         }
 
-        // Копируем соединения (требуется найти соответствующие точки в новых элементах)
+        // Копируем соединения
         for (const auto& conn : internalConnections) {
-            // Находим соответствующие элементы в новой вкладке по позиции и типу
-            TConnectionPoint* fromPoint = FindRestoredConnectionPoint(conn.first);
-            TConnectionPoint* toPoint = FindRestoredConnectionPoint(conn.second);
+            if (conn.first && conn.second) {
+                TCircuitElement* fromElement = elementMap[conn.first->Owner];
+                TCircuitElement* toElement = elementMap[conn.second->Owner];
 
-            if (fromPoint && toPoint) {
-                tabData->Connections.push_back(std::make_pair(fromPoint, toPoint));
+                if (fromElement && toElement) {
+                    // Находим соответствующие точки соединения в новых элементах
+                    TConnectionPoint* fromPoint = FindConnectionPointByRelCoords(fromElement, conn.first->RelX, conn.first->RelY, false);
+                    TConnectionPoint* toPoint = FindConnectionPointByRelCoords(toElement, conn.second->RelX, conn.second->RelY, true);
+
+                    if (fromPoint && toPoint) {
+                        tabData->Connections.push_back(std::make_pair(fromPoint, toPoint));
+                    }
+                }
             }
         }
 
         tabData->IsSubCircuit = true;
         tabData->SubCircuit = SubCircuit;
+        tabData->IsReadOnly = true; // Режим только для чтения
         SubCircuit->SetAssociatedTab(newTab);
     } else {
         // Основная схема
         tabData->IsSubCircuit = false;
+        tabData->IsReadOnly = false;
     }
 
-	newTab->Tag = NativeInt(tabData);
+    newTab->Tag = NativeInt(tabData);
 
     // Обновляем ширину вкладок после создания новой
-	UpdateTabWidths();
+    UpdateTabWidths();
+
     return newTab;
 }
 
@@ -1852,15 +1911,19 @@ void __fastcall TMainForm::miCloseTabClick(TObject *Sender) {
         if (tabData) {
             // Если это вкладка подсхемы, обновляем данные в подсхеме перед закрытием
             if (tabData->IsSubCircuit && tabData->SubCircuit) {
-                // Здесь можно сохранить изменения из вкладки обратно в подсхему
-                // Для этого нужно скопировать элементы и соединения из tabData обратно в SubCircuit
-                // Это сложная операция, требующая глубокого копирования, поэтому пока просто закрываем
+                TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(tabData->SubCircuit);
+                if (subCircuit) {
+                    subCircuit->SetAssociatedTab(nullptr);
+                }
             }
 
             delete tabData;
         }
 
         delete activeTab;
+
+        // Обновляем ширину вкладок после закрытия
+        UpdateTabWidths();
     }
 }
 
@@ -1868,14 +1931,6 @@ void TMainForm::CloseTab(TTabSheet* Tab) {
     if (SchemePageControl->PageCount > 1 && Tab) {
         TTabData* tabData = reinterpret_cast<TTabData*>(Tab->Tag);
         if (tabData) {
-            // Если это вкладка подсхемы, обновляем данные в подсхеме перед закрытием
-            if (tabData->IsSubCircuit && tabData->SubCircuit) {
-                TSubCircuit* subCircuit = dynamic_cast<TSubCircuit*>(tabData->SubCircuit);
-                if (subCircuit) {
-                    subCircuit->SetAssociatedTab(nullptr);
-                }
-            }
-
             delete tabData;
         }
 
@@ -1887,13 +1942,7 @@ void TMainForm::CloseTab(TTabSheet* Tab) {
         FHotCloseTabIndex = -1;
 
         // Обновляем ширину вкладок после закрытия
-		UpdateTabWidths();
-
-        // Обновляем интерфейс после закрытия вкладки
-        UpdateCurrentTab();
-        StatusBar->Panels->Items[0]->Text = "Вкладка закрыта";
-    } else if (SchemePageControl->PageCount == 1) {
-        StatusBar->Panels->Items[0]->Text = "Нельзя закрыть последнюю вкладку";
+        UpdateTabWidths();
     }
 }
 
@@ -1951,7 +2000,6 @@ void __fastcall TMainForm::btnLoadSchemeClick(TObject *Sender) {
         }
     }
 }
-
 // ИСПРАВЛЕННЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ВЫДЕЛЕННЫМИ ЭЛЕМЕНТАМИ
 
 std::vector<TCircuitElement*> TMainForm::GetSelectedElements() {
@@ -2172,10 +2220,57 @@ void __fastcall TMainForm::miViewSubCircuitClick(TObject *Sender) {
     }
 }
 
+// ============================================================================
+// НОВЫЕ МЕТОДЫ ДЛЯ УЛУЧШЕНИЙ
+// ============================================================================
+
+// Метод для автоматической установки ширины вкладок
+void TMainForm::UpdateTabWidths() {
+    if (!SchemePageControl || SchemePageControl->PageCount == 0) return;
+
+    TCanvas* canvas = SchemePageControl->Canvas;
+    canvas->Font->Assign(SchemePageControl->Font);
+
+    int minTabWidth = 120;
+    int maxTabWidth = 200;
+    int padding = 40;
+
+    int maxWidth = minTabWidth;
+
+    for (int i = 0; i < SchemePageControl->PageCount; i++) {
+        String tabText = SchemePageControl->Pages[i]->Caption;
+        int textWidth = canvas->TextWidth(tabText);
+        int calculatedWidth = textWidth + padding;
+
+        if (calculatedWidth > maxWidth && calculatedWidth <= maxTabWidth) {
+            maxWidth = calculatedWidth;
+        } else if (calculatedWidth > maxTabWidth) {
+            maxWidth = maxTabWidth;
+        }
+    }
+
+    SchemePageControl->TabWidth = maxWidth;
+}
+
+// Поиск точки соединения по относительным координатам
+TConnectionPoint* TMainForm::FindConnectionPointByRelCoords(TCircuitElement* element, double relX, double relY, bool isInput) {
+    if (!element) return nullptr;
+
+    auto& points = isInput ? element->Inputs : element->Outputs;
+
+    for (auto& point : points) {
+        if (fabs(point.RelX - relX) < 0.001 && fabs(point.RelY - relY) < 0.001) {
+            return &point;
+        }
+    }
+
+    return nullptr;
+}
+
 // Метод для получения области крестика на вкладке
 TRect TMainForm::GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect) {
     int closeButtonSize = 12;
-    int margin = 4;
+    int margin = 8;
 
     TRect closeRect;
     closeRect.Left = TabRect.Right - closeButtonSize - margin;
@@ -2195,92 +2290,175 @@ bool TMainForm::IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex
             Y >= closeRect.Top && Y <= closeRect.Bottom);
 }
 
-// Отрисовка вкладки с крестиком
-// Отрисовка вкладки с крестиком (улучшенная версия)
-// Отрисовка вкладки с крестиком (с подсветкой)
-void __fastcall TMainForm::SchemePageControlDrawTab(TCustomTabControl *Control, int TabIndex, const TRect &Rect, bool Active) {
-    TCanvas *canvas = Control->Canvas;
+// Привязка точки к сетке
+TPoint TMainForm::SnapToGridPoint(const TPoint& Point) {
+    if (!FSnapToGrid) return Point;
 
-    // Сохраняем текущие настройки
-    TColor oldBrushColor = canvas->Brush->Color;
-    TColor oldPenColor = canvas->Pen->Color;
-    TColor oldFontColor = canvas->Font->Color;
-    TFontStyles oldFontStyles = canvas->Font->Style;
+    int gridSize = 20; // Размер сетки
+    int snappedX = ((Point.X + gridSize/2) / gridSize) * gridSize;
+    int snappedY = ((Point.Y + gridSize/2) / gridSize) * gridSize;
 
-    try {
-        // Рисуем фон вкладки
-        if (Active) {
-            canvas->Brush->Color = clHighlight;
-            canvas->Font->Color = clHighlightText;
-        } else {
-            canvas->Brush->Color = clBtnFace;
-            canvas->Font->Color = clWindowText;
+    return TPoint(snappedX, snappedY);
+}
+
+// Расчет пути для прямоугольного соединения
+std::vector<TPoint> TMainForm::CalculateRectangularPath(const TPoint& Start, const TPoint& End) {
+    std::vector<TPoint> path;
+
+	TPoint snappedStart = SnapToGridPoint(Start);
+	TPoint snappedEnd = SnapToGridPoint(End);
+
+    // Вычисляем среднюю точку по X с привязкой к сетке
+    int midX = (snappedStart.X + snappedEnd.X) / 2;
+    midX = SnapToGridPoint(TPoint(midX, 0)).X;
+
+    path.push_back(snappedStart);
+    path.push_back(TPoint(snappedStart.X, snappedStart.Y));
+    path.push_back(TPoint(snappedStart.X, (snappedStart.Y + snappedEnd.Y) / 2));
+    path.push_back(TPoint(midX, (snappedStart.Y + snappedEnd.Y) / 2));
+    path.push_back(TPoint(midX, snappedEnd.Y));
+    path.push_back(TPoint(snappedEnd.X, snappedEnd.Y));
+    path.push_back(snappedEnd);
+
+    // Упрощаем путь, удаляя соседние дубликаты
+    std::vector<TPoint> simplifiedPath;
+    for (size_t i = 0; i < path.size(); i++) {
+        if (i == 0 || path[i].X != path[i-1].X || path[i].Y != path[i-1].Y) {
+            simplifiedPath.push_back(path[i]);
         }
-
-        canvas->FillRect(Rect);
-
-        // Получаем текст вкладки
-        TPageControl* pageControl = dynamic_cast<TPageControl*>(Control);
-        String tabText = "";
-        if (pageControl && TabIndex >= 0 && TabIndex < pageControl->PageCount) {
-            tabText = pageControl->Pages[TabIndex]->Caption;
-        }
-
-        // Рисуем текст вкладки (с отступом для крестика)
-        TRect textRect = Rect;
-        textRect.Right -= 20; // Отступ для крестика
-
-        canvas->Font->Style = TFontStyles() << fsBold;
-        canvas->TextOut(textRect.Left + 8, textRect.Top + 4, tabText);
-
-        // Рисуем крестик
-        TRect closeRect = GetTabCloseButtonRect(Control, TabIndex, Rect);
-
-        // Определяем, наведен ли курсор на этот крестик
-        bool isHot = (FHotCloseTabIndex == TabIndex);
-
-        // Фон крестика
-        if (isHot) {
-            canvas->Brush->Color = clRed; // Подсвечиваем красным при наведении
-        } else {
-            canvas->Brush->Color = Active ? clHighlight : clBtnFace;
-        }
-        canvas->FillRect(closeRect);
-
-        // Рамка крестика
-        canvas->Pen->Color = isHot ? clWhite : (Active ? clHighlightText : clGray);
-        canvas->Rectangle(closeRect.Left, closeRect.Top, closeRect.Right, closeRect.Bottom);
-
-        // Линии крестика
-        canvas->Pen->Color = isHot ? clWhite : (Active ? clHighlightText : clBlack);
-        canvas->Pen->Width = 2;
-
-        int crossMargin = 3;
-        canvas->MoveTo(closeRect.Left + crossMargin, closeRect.Top + crossMargin);
-        canvas->LineTo(closeRect.Right - crossMargin, closeRect.Bottom - crossMargin);
-
-        canvas->MoveTo(closeRect.Right - crossMargin, closeRect.Top + crossMargin);
-        canvas->LineTo(closeRect.Left + crossMargin, closeRect.Bottom - crossMargin);
-
-        canvas->Pen->Width = 1;
     }
-    __finally {
-        // Восстанавливаем настройки
-        canvas->Brush->Color = oldBrushColor;
-        canvas->Pen->Color = oldPenColor;
-        canvas->Font->Color = oldFontColor;
-        canvas->Font->Style = oldFontStyles;
+
+    return simplifiedPath;
+}
+
+// Отрисовка прямоугольного соединения
+void TMainForm::DrawRectangularConnection(TCanvas* Canvas, const TPoint& Start, const TPoint& End, TColor Color) {
+    auto path = CalculateRectangularPath(Start, End);
+
+    if (path.size() < 2) return;
+
+    Canvas->Pen->Color = Color;
+    Canvas->MoveTo(path[0].X, path[0].Y);
+
+    for (size_t i = 1; i < path.size(); i++) {
+        Canvas->LineTo(path[i].X, path[i].Y);
+    }
+
+    // Рисуем стрелку в конце
+    if (path.size() >= 2) {
+        TPoint lastSegmentStart = path[path.size() - 2];
+        TPoint arrowTip = path[path.size() - 1];
+
+        int dx = arrowTip.X - lastSegmentStart.X;
+        int dy = arrowTip.Y - lastSegmentStart.Y;
+        double length = sqrt(dx*dx + dy*dy);
+
+        if (length > 10) {
+            double unitX = dx / length;
+            double unitY = dy / length;
+
+            int arrowSize = 8;
+            int arrowX = arrowTip.X - static_cast<int>(unitX * arrowSize);
+            int arrowY = arrowTip.Y - static_cast<int>(unitY * arrowSize);
+
+            Canvas->MoveTo(arrowX - static_cast<int>(unitY * arrowSize/2),
+                          arrowY + static_cast<int>(unitX * arrowSize/2));
+            Canvas->LineTo(arrowTip.X, arrowTip.Y);
+            Canvas->LineTo(arrowX + static_cast<int>(unitY * arrowSize/2),
+                          arrowY - static_cast<int>(unitX * arrowSize/2));
+        }
     }
 }
 
-// Обработка кликов по вкладкам
-void __fastcall TMainForm::SchemePageControlMouseDown(TObject *Sender, TMouseButton Button, TShiftState Shift, int X, int Y) {
+// Обработчики новых пунктов меню
+void __fastcall TMainForm::miRectangularConnectionsClick(TObject *Sender) {
+    FRectangularConnections = !FRectangularConnections;
+    miRectangularConnections->Checked = FRectangularConnections;
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
+
+    StatusBar->Panels->Items[0]->Text = FRectangularConnections ?
+        "Прямоугольные соединения включены" : "Прямоугольные соединения выключены";
+}
+
+void __fastcall TMainForm::miSnapToGridClick(TObject *Sender) {
+    FSnapToGrid = !FSnapToGrid;
+    miSnapToGrid->Checked = FSnapToGrid;
+    StatusBar->Panels->Items[0]->Text = FSnapToGrid ?
+        "Привязка к сетке включена" : "Привязка к сетке выключена";
+}
+
+void __fastcall TMainForm::SchemePageControlDrawTab(TCustomTabControl *Control,
+    int TabIndex, const TRect &Rect, bool Active) {
+
+    // Приводим к TPageControl, так как SchemePageControl именно этого типа
+    TPageControl* pageControl = dynamic_cast<TPageControl*>(Control);
+    if (!pageControl || TabIndex < 0 || TabIndex >= pageControl->PageCount) return;
+
+    TCanvas* canvas = pageControl->Canvas;
+    TTabSheet* tab = pageControl->Pages[TabIndex];
+
+    if (!tab) return;
+
+    // Фон вкладки
+    if (Active) {
+        canvas->Brush->Color = clHighlight;
+        canvas->Font->Color = clHighlightText;
+    } else {
+        canvas->Brush->Color = clBtnFace;
+        canvas->Font->Color = clWindowText;
+    }
+    canvas->FillRect(Rect);
+
+    // Текст вкладки
+    String tabText = tab->Caption;
+    TRect textRect = Rect;
+    textRect.Left += 8;
+    textRect.Right -= 25; // Место для крестика
+
+    int textHeight = canvas->TextHeight(tabText);
+    int textY = textRect.Top + (textRect.Height() - textHeight) / 2;
+    canvas->TextRect(textRect, textRect.Left, textY, tabText);
+
+    // Крестик для закрытия
+    TRect closeRect = GetTabCloseButtonRect(pageControl, TabIndex, Rect);
+
+    // Фон крестика
+    if (FHotCloseTabIndex == TabIndex) {
+        canvas->Brush->Color = clRed;
+        canvas->FillRect(closeRect);
+    } else {
+        canvas->Brush->Color = Active ? clHighlight : clBtnFace;
+        canvas->FillRect(closeRect);
+    }
+
+    // Рисуем крестик
+    canvas->Pen->Color = Active ? clHighlightText : clWindowText;
+    canvas->Pen->Width = 1;
+
+    int crossSize = 6;
+    int centerX = closeRect.Left + closeRect.Width() / 2;
+    int centerY = closeRect.Top + closeRect.Height() / 2;
+
+    canvas->MoveTo(centerX - crossSize, centerY - crossSize);
+    canvas->LineTo(centerX + crossSize, centerY + crossSize);
+    canvas->MoveTo(centerX + crossSize, centerY - crossSize);
+    canvas->LineTo(centerX - crossSize, centerY + crossSize);
+}
+
+void __fastcall TMainForm::SchemePageControlMouseDown(TObject *Sender,
+    TMouseButton Button, TShiftState Shift, int X, int Y) {
+
     if (Button == mbLeft) {
-        TPageControl *pageControl = dynamic_cast<TPageControl*>(Sender);
+        TPageControl* pageControl = dynamic_cast<TPageControl*>(Sender);
         if (!pageControl) return;
 
-        // Проверяем все вкладки на клик по крестику
+        // Проверяем клик на крестик
         for (int i = 0; i < pageControl->PageCount; i++) {
+            TRect tabRect = pageControl->TabRect(i);
             if (IsPointInTabCloseButton(pageControl, i, X, Y)) {
                 // Закрываем вкладку
                 CloseTab(pageControl->Pages[i]);
@@ -2290,28 +2468,30 @@ void __fastcall TMainForm::SchemePageControlMouseDown(TObject *Sender, TMouseBut
     }
 }
 
-// Обработка движения мыши над PageControl для подсветки крестиков
-void __fastcall TMainForm::SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y) {
-    TPageControl *pageControl = dynamic_cast<TPageControl*>(Sender);
+void __fastcall TMainForm::SchemePageControlMouseMove(TObject *Sender,
+    TShiftState Shift, int X, int Y) {
+
+    TPageControl* pageControl = dynamic_cast<TPageControl*>(Sender);
     if (!pageControl) return;
 
-    int oldHotCloseTabIndex = FHotCloseTabIndex;
+    int oldHotIndex = FHotCloseTabIndex;
     FHotCloseTabIndex = -1;
 
-    // Проверяем все вкладки на наведение на крестик
+    // Проверяем, над каким крестиком находится курсор
     for (int i = 0; i < pageControl->PageCount; i++) {
+        TRect tabRect = pageControl->TabRect(i);
         if (IsPointInTabCloseButton(pageControl, i, X, Y)) {
             FHotCloseTabIndex = i;
             break;
         }
     }
 
-    // Перерисовываем если состояние изменилось
-    if (FHotCloseTabIndex != oldHotCloseTabIndex) {
+    // Перерисовываем, если состояние изменилось
+    if (oldHotIndex != FHotCloseTabIndex) {
         pageControl->Invalidate();
     }
 
-    // Меняем курсор если над крестиком
+    // Меняем курсор при наведении на крестик
     if (FHotCloseTabIndex >= 0) {
         pageControl->Cursor = crHandPoint;
     } else {
@@ -2319,42 +2499,56 @@ void __fastcall TMainForm::SchemePageControlMouseMove(TObject *Sender, TShiftSta
     }
 }
 
-// Метод для автоматической установки ширины вкладок
-void TMainForm::UpdateTabWidths() {
-    TCanvas* canvas = SchemePageControl->Canvas;
-    canvas->Font->Assign(SchemePageControl->Font);
+void TMainForm::StartWireDrawing(TConnectionPoint* StartPoint) {
+    FIsDrawingWire = true;
+    FWireStartPoint = StartPoint;
+    FCurrentWirePoints.clear();
+    FCurrentWirePoints.push_back(TPoint(StartPoint->X, StartPoint->Y));
 
-    int minTabWidth = 120; // Минимальная ширина
-    int maxTabWidth = 200; // Максимальная ширина
-    int padding = 40; // Отступы для текста и крестика
-
-    for (int i = 0; i < SchemePageControl->PageCount; i++) {
-        String tabText = SchemePageControl->Pages[i]->Caption;
-        int textWidth = canvas->TextWidth(tabText);
-        int calculatedWidth = textWidth + padding;
-
-        // Ограничиваем ширину
-        if (calculatedWidth < minTabWidth) {
-            calculatedWidth = minTabWidth;
-        } else if (calculatedWidth > maxTabWidth) {
-            calculatedWidth = maxTabWidth;
-        }
-
-        // Если нужно установить разную ширину для каждой вкладки,
-        // это можно сделать через OwnerDraw, но в стандартном TPageControl
-        // все вкладки имеют одинаковую ширину
-    }
-
-    // Устанавливаем ширину для всех вкладок (по самой широкой)
-    int maxWidth = minTabWidth;
-    for (int i = 0; i < SchemePageControl->PageCount; i++) {
-        String tabText = SchemePageControl->Pages[i]->Caption;
-        int textWidth = canvas->TextWidth(tabText);
-        int calculatedWidth = textWidth + padding;
-        if (calculatedWidth > maxWidth && calculatedWidth <= maxTabWidth) {
-            maxWidth = calculatedWidth;
-        }
-    }
-
-    SchemePageControl->TabWidth = maxWidth;
+    StatusBar->Panels->Items[0]->Text = "Режим рисования провода: кликайте по сетке для добавления точек, ПКМ для завершения";
 }
+
+void TMainForm::AddWirePoint(const TPoint& Point) {
+    if (FIsDrawingWire) {
+        FCurrentWirePoints.push_back(Point);
+        TTabData* currentTab = GetCurrentTabData();
+        if (currentTab && currentTab->PaintBox) {
+            currentTab->PaintBox->Repaint();
+        }
+    }
+}
+
+void TMainForm::CompleteWireDrawing(TConnectionPoint* EndPoint) {
+    if (FIsDrawingWire && FWireStartPoint && EndPoint && FCurrentWirePoints.size() >= 2) {
+        TTabData* currentTab = GetCurrentTabData();
+        if (currentTab) {
+            // Создаем соединение через промежуточные точки
+            for (size_t i = 0; i < FCurrentWirePoints.size() - 1; i++) {
+                // Создаем временные точки соединения
+                TConnectionPoint* tempFrom = new TConnectionPoint(
+                    FCurrentWirePoints[i].X, FCurrentWirePoints[i].Y,
+                    TTernary::ZERO, false, TLineStyle::INTERNAL_CONNECTION
+                );
+                TConnectionPoint* tempTo = new TConnectionPoint(
+                    FCurrentWirePoints[i+1].X, FCurrentWirePoints[i+1].Y,
+                    TTernary::ZERO, true, TLineStyle::INTERNAL_CONNECTION
+                );
+                currentTab->Connections.push_back(std::make_pair(tempFrom, tempTo));
+            }
+
+            // Основное соединение
+            currentTab->Connections.push_back(std::make_pair(FWireStartPoint, EndPoint));
+        }
+    }
+
+    FIsDrawingWire = false;
+    FCurrentWirePoints.clear();
+    FWireStartPoint = nullptr;
+
+    TTabData* currentTab = GetCurrentTabData();
+    if (currentTab && currentTab->PaintBox) {
+        currentTab->PaintBox->Repaint();
+    }
+    StatusBar->Panels->Items[0]->Text = "Соединение завершено";
+}
+

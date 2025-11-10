@@ -10,7 +10,6 @@ TCircuitElement::TCircuitElement(int AId, const String& AName, int X, int Y)
 }
 
 void TCircuitElement::Draw(TCanvas* Canvas) {
-    // Базовая реализация - рисуем прямоугольник с именем
     Canvas->Brush->Color = clWhite;
     Canvas->Pen->Color = clBlack;
     Canvas->Rectangle(FBounds.Left, FBounds.Top, FBounds.Right, FBounds.Bottom);
@@ -20,13 +19,11 @@ void TCircuitElement::Draw(TCanvas* Canvas) {
 }
 
 void TCircuitElement::DrawConnectionPoints(TCanvas* Canvas) {
-    // Входы - зеленые кружки
     Canvas->Brush->Color = clGreen;
     for (const auto& input : FInputs) {
         Canvas->Ellipse(input.X - 4, input.Y - 4, input.X + 4, input.Y + 4);
     }
 
-    // Выходы - синие квадраты
     Canvas->Brush->Color = clBlue;
     for (const auto& output : FOutputs) {
         Canvas->Rectangle(output.X - 4, output.Y - 4, output.X + 4, output.Y + 4);
@@ -36,14 +33,12 @@ void TCircuitElement::DrawConnectionPoints(TCanvas* Canvas) {
 }
 
 TConnectionPoint* TCircuitElement::GetConnectionAt(int X, int Y) {
-    // Проверяем входы
     for (auto& input : FInputs) {
         if (abs(input.X - X) < 8 && abs(input.Y - Y) < 8) {
             return &input;
         }
     }
 
-    // Проверяем выходы
     for (auto& output : FOutputs) {
         if (abs(output.X - X) < 8 && abs(output.Y - Y) < 8) {
             return &output;
@@ -154,17 +149,13 @@ void TCircuitElement::DrawCrossingLine(TCanvas* Canvas, int X1, int Y1, int X2, 
     Canvas->Pen->Style = psSolid;
     Canvas->Pen->Color = clBlack;
 }
-
-// Реализация базовых элементов
 TMagneticAmplifier::TMagneticAmplifier(int AId, int X, int Y, bool IsPowerful)
     : TCircuitElement(AId, "Магнитный усилитель", X, Y), FIsPowered(false) {
 
-    // Создаем точки соединения с правильными относительными позициями
     FInputs.push_back(TConnectionPoint(this, X-15, Y+15, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FInputs.push_back(TConnectionPoint(this, X-15, Y+30, TTernary::ZERO, true, TLineStyle::POSITIVE_CONTROL));
     FOutputs.push_back(TConnectionPoint(this, X+95, Y+22, TTernary::ZERO, false, TLineStyle::OUTPUT_LINE));
 
-    // Немедленно рассчитываем относительные позиции
     CalculateRelativePositions();
 }
 
@@ -274,8 +265,6 @@ void TShiftRegister::LoadFromIni(TIniFile* IniFile, const String& Section) {
     TCircuitElement::LoadFromIni(IniFile, Section);
     FBitCount = IniFile->ReadInteger(Section, "BitCount", 4);
 }
-
-// Реализация методов сериализации TCircuitElement
 void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const {
     IniFile->WriteString(Section, "ClassName", GetClassName());
     IniFile->WriteString(Section, "Name", FName);
@@ -285,11 +274,9 @@ void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const 
     IniFile->WriteInteger(Section, "Width", FBounds.Width());
     IniFile->WriteInteger(Section, "Height", FBounds.Height());
 
-    // Сохраняем состояние
     int stateValue = static_cast<int>(FCurrentState);
     IniFile->WriteInteger(Section, "CurrentState", stateValue);
 
-    // Сохраняем точки входа
     IniFile->WriteInteger(Section, "InputCount", FInputs.size());
     for (int i = 0; i < FInputs.size(); i++) {
         String inputSection = Section + "_Input_" + IntToStr(i);
@@ -298,7 +285,6 @@ void TCircuitElement::SaveToIni(TIniFile* IniFile, const String& Section) const 
         IniFile->WriteInteger(inputSection, "LineStyle", static_cast<int>(FInputs[i].LineStyle));
     }
 
-    // Сохраняем точки выхода
     IniFile->WriteInteger(Section, "OutputCount", FOutputs.size());
     for (int i = 0; i < FOutputs.size(); i++) {
         String outputSection = Section + "_Output_" + IntToStr(i);
@@ -322,7 +308,6 @@ void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
     int stateValue = IniFile->ReadInteger(Section, "CurrentState", 0);
     FCurrentState = static_cast<TTernary>(stateValue);
 
-    // Загружаем точки входа
     int inputCount = IniFile->ReadInteger(Section, "InputCount", 0);
     FInputs.clear();
     for (int i = 0; i < inputCount; i++) {
@@ -339,7 +324,6 @@ void TCircuitElement::LoadFromIni(TIniFile* IniFile, const String& Section) {
         FInputs.back().RelY = relY;
     }
 
-    // Загружаем точки выхода
     int outputCount = IniFile->ReadInteger(Section, "OutputCount", 0);
     FOutputs.clear();
     for (int i = 0; i < outputCount; i++) {

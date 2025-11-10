@@ -41,10 +41,12 @@ struct TTabData {
     std::vector<std::unique_ptr<TCircuitElement>> Elements;
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> Connections;
     bool IsSubCircuit;
+    bool IsReadOnly;
     TCircuitElement* SubCircuit;
     int NextElementId;
 
-    TTabData() : ScrollBox(nullptr), PaintBox(nullptr), IsSubCircuit(false), SubCircuit(nullptr), NextElementId(1) {}
+    TTabData() : ScrollBox(nullptr), PaintBox(nullptr), IsSubCircuit(false),
+                 IsReadOnly(false), SubCircuit(nullptr), NextElementId(1) {}
     ~TTabData() {
         // Автоматическая очистка при удалении
     }
@@ -89,6 +91,9 @@ __published:
     TMenuItem *miZoomIn;
     TMenuItem *miZoomOut;
     TMenuItem *miZoomFit;
+    TMenuItem *miOptions;
+    TMenuItem *miRectangularConnections;
+    TMenuItem *miSnapToGrid;
     TMenuItem *miSimulation;
     TMenuItem *miRun;
     TMenuItem *miReset;
@@ -99,15 +104,15 @@ __published:
     TMenuItem *miCloseTab;
     TMenuItem *miViewSubCircuit;
 
+    void __fastcall CircuitImageMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
+    void __fastcall CircuitImageMouseUp(TObject *Sender, TMouseButton Button,
+        TShiftState Shift, int X, int Y);
     void __fastcall WorkspaceMouseWheel(TObject *Sender, TShiftState Shift,
-    int WheelDelta, const TPoint &MousePos, bool &Handled);
+        int WheelDelta, const TPoint &MousePos, bool &Handled);
     void __fastcall FormCreate(TObject *Sender);
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall FormResize(TObject *Sender);
     void __fastcall CircuitImageMouseDown(TObject *Sender, TMouseButton Button,
-        TShiftState Shift, int X, int Y);
-    void __fastcall CircuitImageMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
-    void __fastcall CircuitImageMouseUp(TObject *Sender, TMouseButton Button,
         TShiftState Shift, int X, int Y);
     void __fastcall CircuitImagePaint(TObject *Sender);
     void __fastcall btnRunSimulationClick(TObject *Sender);
@@ -133,11 +138,12 @@ __published:
     void __fastcall SchemePageControlChange(TObject *Sender);
     void __fastcall miCloseTabClick(TObject *Sender);
     void __fastcall miViewSubCircuitClick(TObject *Sender);
-	void __fastcall SimulationTimerTimer(TObject *Sender);
+    void __fastcall SimulationTimerTimer(TObject *Sender);
+    void __fastcall miRectangularConnectionsClick(TObject *Sender);
+    void __fastcall miSnapToGridClick(TObject *Sender);
     void __fastcall SchemePageControlDrawTab(TCustomTabControl *Control, int TabIndex, const TRect &Rect, bool Active);
     void __fastcall SchemePageControlMouseDown(TObject *Sender, TMouseButton Button, TShiftState Shift, int X, int Y);
-    TRect GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect);
-    bool IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex, int X, int Y);
+    void __fastcall SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
 
 private:
     std::vector<std::unique_ptr<TCircuitElement>> FElements;
@@ -155,22 +161,22 @@ private:
     int FDragOffsetY;
     double FZoomFactor;
     int FScrollOffsetX;
-	int FScrollOffsetY;
+    int FScrollOffsetY;
+    bool FIsDrawingWire;
+    std::vector<TPoint> FCurrentWirePoints;
+    TConnectionPoint* FWireStartPoint;
 
-    int FHotCloseTabIndex; // Вкладка, на которой навели на крестик
-	void __fastcall SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
-    void UpdateTabWidths();
-
-
-    // Новые поля для управления библиотеками
     std::unique_ptr<TLibraryManager> FLibraryManager;
     std::unique_ptr<TComponentLibrary> FBasicLibrary;
-    std::vector<TLoadedLibrary> FLoadedLibraries; // Все загруженные DLL
+    std::vector<TLoadedLibrary> FLoadedLibraries;
 
-    // Новые поля для симуляции и вкладок
     bool FSimulationRunning;
     int FSimulationStep;
     TTimer* FSimulationTimer;
+
+    int FHotCloseTabIndex;
+    bool FRectangularConnections;
+    bool FSnapToGrid;
 
     void DrawCircuit();
     TColor TernaryToColor(TTernary Value);
@@ -197,16 +203,13 @@ private:
     TRect LogicalToScreen(const TRect& logicalRect) const;
     void DeleteSelectedElements();
 
-    // Новые методы для размещения элементов
     TPoint GetVisibleAreaCenter() const;
     bool FindFreeLocation(int& x, int& y, int width, int height);
     TPoint GetBestPlacementPosition(int width, int height);
 
-    // Новые методы для исправления проблем
     TConnectionPoint* FindRestoredConnectionPoint(const TConnectionPoint* originalPoint);
     void OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData);
 
-    // Методы для сериализации
     void SaveElementToIni(TCircuitElement* Element, TIniFile* IniFile, const String& Section);
     std::unique_ptr<TCircuitElement> LoadElementFromIni(TIniFile* IniFile, const String& Section);
     void SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile, const String& Section, const String& Prefix);
@@ -214,22 +217,32 @@ private:
     TConnectionPoint* FindConnectionPointInElement(TCircuitElement* element, const TConnectionPoint* pointTemplate);
     std::unique_ptr<TCircuitElement> CreateElementByClassName(const String& ClassName, int Id, int X, int Y);
 
-    // Новые методы для автоматической загрузки DLL
     void LoadAllLibraries();
     void UnloadAllLibraries();
     bool LoadLibraryFromDLL(const String& DllPath);
     TRegisterLibraryFunction FindRegisterFunction(HINSTANCE LibraryHandle);
     TUnregisterLibraryFunction FindUnregisterFunction(HINSTANCE LibraryHandle);
 
-    // Новые методы для управления вкладками
     TTabSheet* CreateNewTab(const String& Title, TSubCircuit* SubCircuit = nullptr);
     void UpdateCurrentTab();
     TTabData* GetCurrentTabData() const;
     void CloseTab(TTabSheet* Tab);
     void UpdateTabTitle(TTabSheet* Tab, const String& Title);
 
+    void UpdateTabWidths();
+    TConnectionPoint* FindConnectionPointByRelCoords(TCircuitElement* element, double relX, double relY, bool isInput);
+    TRect GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect);
+    bool IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex, int X, int Y);
+    void DrawRectangularConnection(TCanvas* Canvas, const TPoint& Start, const TPoint& End, TColor Color);
+    TPoint SnapToGridPoint(const TPoint& Point);
+    std::vector<TPoint> CalculateRectangularPath(const TPoint& Start, const TPoint& End);
+
+    // Новые методы для рисования проводов
+    void StartWireDrawing(TConnectionPoint* StartPoint);
+    void AddWirePoint(const TPoint& Point);
+    void CompleteWireDrawing(TConnectionPoint* EndPoint = nullptr);
+
 protected:
-    // Делаем методы доступными для TSubCircuit
     friend class TSubCircuit;
 
 public:
@@ -255,7 +268,6 @@ public:
     void SetAssociatedTab(TTabSheet* Tab) { FAssociatedTab = Tab; }
     TTabSheet* GetAssociatedTab() const { return FAssociatedTab; }
 
-    // Методы сериализации
     virtual String GetClassName() const override { return "TSubCircuit"; }
     virtual void SaveToIni(TIniFile* IniFile, const String& Section) const override;
     virtual void LoadFromIni(TIniFile* IniFile, const String& Section) override;

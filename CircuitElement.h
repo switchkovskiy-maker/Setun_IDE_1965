@@ -27,16 +27,13 @@ public:
     TCircuitElement(int AId, const String& AName, int X, int Y);
     virtual ~TCircuitElement() {}
 
-    // Базовая реализация Calculate (может быть переопределена в производных классах)
     virtual void Calculate() { /* Базовая реализация - ничего не делает */ }
-
     virtual void Draw(TCanvas* Canvas);
     virtual TConnectionPoint* GetConnectionAt(int X, int Y);
 
     void SetBounds(const TRect& NewBounds) {
         FBounds = NewBounds;
 
-        // Обновляем абсолютные координаты на основе относительных
         for (auto& input : FInputs) {
             input.X = NewBounds.Left + (int)(input.RelX * NewBounds.Width());
             input.Y = NewBounds.Top + (int)(input.RelY * NewBounds.Height());
@@ -72,7 +69,6 @@ public:
     void SetName(const String& AName) { FName = AName; }
     void SetCurrentState(TTernary State) { FCurrentState = State; }
 
-    // Новый метод для поиска точки соединения по относительным координатам
     TConnectionPoint* FindConnectionPointByRelPos(double relX, double relY, bool IsInput) {
         auto& points = IsInput ? FInputs : FOutputs;
         for (auto& point : points) {
@@ -83,7 +79,6 @@ public:
         return nullptr;
     }
 
-    // Методы сериализации
     virtual String GetClassName() const { return "TCircuitElement"; }
     virtual void SaveToIni(TIniFile* IniFile, const String& Section) const;
     virtual void LoadFromIni(TIniFile* IniFile, const String& Section);
@@ -96,7 +91,6 @@ public:
     __property std::vector<TConnectionPoint> Outputs = { read = FOutputs };
 };
 
-// Базовые элементы - с реализацией Calculate
 class TMagneticAmplifier : public TCircuitElement {
 private:
     bool FIsPowered;
