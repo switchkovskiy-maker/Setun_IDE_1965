@@ -13,6 +13,8 @@
 #include "CircuitElement.h"
 #include "CircuitElements.h"
 #include "ComponentLibrary.h"
+#include "Modules/SimulationManager.h"
+#include "Modules/SerializationManager.h"
 #include <System.Classes.hpp>
 #include <System.JSON.hpp>
 #include <Vcl.Dialogs.hpp>
@@ -51,7 +53,6 @@ struct TTabData {
         // Автоматическая очистка при удалении
     }
 };
-
 // Предварительное объявление
 class TSubCircuit;
 
@@ -103,7 +104,13 @@ __published:
     TPopupMenu *TabPopupMenu;
     TMenuItem *miCloseTab;
     TMenuItem *miViewSubCircuit;
+    TMenuItem *miShowBridges;
+    TMenuItem *miExport;
+    TMenuItem *miExportVerilog;
+    TMenuItem *miExportQuartus;
 
+    void __fastcall miExportVerilogClick(TObject *Sender);
+    void __fastcall miExportQuartusClick(TObject *Sender);
     void __fastcall CircuitImageMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
     void __fastcall CircuitImageMouseUp(TObject *Sender, TMouseButton Button,
         TShiftState Shift, int X, int Y);
@@ -138,14 +145,31 @@ __published:
     void __fastcall SchemePageControlChange(TObject *Sender);
     void __fastcall miCloseTabClick(TObject *Sender);
     void __fastcall miViewSubCircuitClick(TObject *Sender);
-    void __fastcall SimulationTimerTimer(TObject *Sender);
     void __fastcall miRectangularConnectionsClick(TObject *Sender);
     void __fastcall miSnapToGridClick(TObject *Sender);
     void __fastcall SchemePageControlDrawTab(TCustomTabControl *Control, int TabIndex, const TRect &Rect, bool Active);
     void __fastcall SchemePageControlMouseDown(TObject *Sender, TMouseButton Button, TShiftState Shift, int X, int Y);
     void __fastcall SchemePageControlMouseMove(TObject *Sender, TShiftState Shift, int X, int Y);
-
+    void __fastcall miShowBridgesClick(TObject *Sender);
 private:
+    // Структура для хранения информации о сегментах соединений
+    struct TConnectionSegment {
+        TPoint Start;
+        TPoint End;
+        TColor Color;
+        bool IsHorizontal;
+    };
+
+    friend class TSubCircuit;
+    // Методы для доступа к менеджерам (только для дружественных классов)
+    TSerializationManager* GetSerializationManager() { return FSerializationManager.get(); }
+	TSimulationManager* GetSimulationManager() { return FSimulationManager.get(); }
+
+	// Менеджеры
+    std::unique_ptr<TSimulationManager> FSimulationManager;
+    std::unique_ptr<TSerializationManager> FSerializationManager;
+
+    // Элементы интерфейса и состояния
     std::vector<std::unique_ptr<TCircuitElement>> FElements;
     std::vector<std::pair<TConnectionPoint*, TConnectionPoint*>> FConnections;
     TCircuitElement* FSelectedElement;
@@ -162,26 +186,23 @@ private:
     double FZoomFactor;
     int FScrollOffsetX;
     int FScrollOffsetY;
-    bool FIsDrawingWire;
-    std::vector<TPoint> FCurrentWirePoints;
-    TConnectionPoint* FWireStartPoint;
 
+    // Библиотеки
     std::unique_ptr<TLibraryManager> FLibraryManager;
     std::unique_ptr<TComponentLibrary> FBasicLibrary;
     std::vector<TLoadedLibrary> FLoadedLibraries;
 
-    bool FSimulationRunning;
-    int FSimulationStep;
-    TTimer* FSimulationTimer;
-
+    // Настройки интерфейса
     int FHotCloseTabIndex;
     bool FRectangularConnections;
     bool FSnapToGrid;
+    bool FShowBridges;
+    bool FIsDrawingWire;
+    std::vector<TPoint> FCurrentWirePoints;
+    TConnectionPoint* FWireStartPoint;
 
+    // Основные методы отрисовки и управления
     void DrawCircuit();
-    TColor TernaryToColor(TTernary Value);
-    void RunSimulationStep();
-    void ResetSimulation();
     void CreateCompleteLibrary();
     std::unique_ptr<TCircuitElement> CreateElement(const String& LibraryName, const String& ElementName, int X, int Y);
     std::unique_ptr<TCircuitElement> CreateElementFromCurrent(const String& ElementName, int X, int Y);
@@ -190,8 +211,6 @@ private:
     void ApplyZoom();
     void CenterCircuit();
     TRect GetCircuitBounds();
-    void SaveSchemeToFile(const String& FileName, TTabData* TabData = nullptr);
-    void LoadSchemeFromFile(const String& FileName, TTabData* TabData = nullptr);
     std::vector<TCircuitElement*> GetSelectedElements();
     void CreateSubCircuitFromSelection();
     void UngroupSubCircuit(TCircuitElement* SubCircuit);
@@ -203,44 +222,58 @@ private:
     TRect LogicalToScreen(const TRect& logicalRect) const;
     void DeleteSelectedElements();
 
+    // Методы позиционирования
     TPoint GetVisibleAreaCenter() const;
     bool FindFreeLocation(int& x, int& y, int width, int height);
     TPoint GetBestPlacementPosition(int width, int height);
 
+    // Методы восстановления состояний
     TConnectionPoint* FindRestoredConnectionPoint(const TConnectionPoint* originalPoint);
     void OptimizedDrawCircuit(TCanvas* Canvas, TTabData* TabData);
 
-    void SaveElementToIni(TCircuitElement* Element, TIniFile* IniFile, const String& Section);
-    std::unique_ptr<TCircuitElement> LoadElementFromIni(TIniFile* IniFile, const String& Section);
-    void SaveConnectionPoint(const TConnectionPoint* Point, TIniFile* IniFile, const String& Section, const String& Prefix);
-    TConnectionPoint* LoadConnectionPoint(TIniFile* IniFile, const String& Section, const String& Prefix, TCircuitElement* Owner);
-    TConnectionPoint* FindConnectionPointInElement(TCircuitElement* element, const TConnectionPoint* pointTemplate);
-    std::unique_ptr<TCircuitElement> CreateElementByClassName(const String& ClassName, int Id, int X, int Y);
-
+    // Методы работы с библиотеками
     void LoadAllLibraries();
     void UnloadAllLibraries();
     bool LoadLibraryFromDLL(const String& DllPath);
     TRegisterLibraryFunction FindRegisterFunction(HINSTANCE LibraryHandle);
     TUnregisterLibraryFunction FindUnregisterFunction(HINSTANCE LibraryHandle);
 
+    // Методы управления вкладками
     TTabSheet* CreateNewTab(const String& Title, TSubCircuit* SubCircuit = nullptr);
     void UpdateCurrentTab();
     TTabData* GetCurrentTabData() const;
     void CloseTab(TTabSheet* Tab);
     void UpdateTabTitle(TTabSheet* Tab, const String& Title);
-
     void UpdateTabWidths();
     TConnectionPoint* FindConnectionPointByRelCoords(TCircuitElement* element, double relX, double relY, bool isInput);
     TRect GetTabCloseButtonRect(TCustomTabControl *Control, int TabIndex, const TRect &TabRect);
     bool IsPointInTabCloseButton(TCustomTabControl *Control, int TabIndex, int X, int Y);
+    
+    // Методы рисования соединений
     void DrawRectangularConnection(TCanvas* Canvas, const TPoint& Start, const TPoint& End, TColor Color);
     TPoint SnapToGridPoint(const TPoint& Point);
-    std::vector<TPoint> CalculateRectangularPath(const TPoint& Start, const TPoint& End);
 
-    // Новые методы для рисования проводов
+    // Методы рисования проводов
     void StartWireDrawing(TConnectionPoint* StartPoint);
     void AddWirePoint(const TPoint& Point);
     void CompleteWireDrawing(TConnectionPoint* EndPoint = nullptr);
+
+    // Методы для работы с путями соединений
+    std::vector<TPoint> CalculateSmartPath(const TPoint& Start, const TPoint& End) const;
+    std::vector<TPoint> CalculateRectangularPath(const TPoint& Start, const TPoint& End) const;
+    TColor TernaryToColor(TTernary Value) const;
+    bool DoSegmentsIntersect(const TPoint& A1, const TPoint& A2, const TPoint& B1, const TPoint& B2) const;
+    TPoint FindIntersectionPoint(const TPoint& A1, const TPoint& A2, const TPoint& B1, const TPoint& B2) const;
+    std::vector<TConnectionSegment> GetAllConnectionSegments(TTabData* TabData) const;
+    void AddBridgeToPath(std::vector<TPoint>& Path, const TPoint& Intersection, bool IsHorizontal);
+
+    // Методы экспорта
+    void ExportToVerilog(const String& FileName);
+    void ExportToQuartusProject(const String& ProjectDir);
+    String GenerateVerilogModule(TCircuitElement* Element, int& ModuleCount);
+    String GenerateVerilogWires(TTabData* TabData);
+    String GeneratePinAssignments(TTabData* TabData);
+    String TritToVerilogCode(TTernary Value);
 
 protected:
     friend class TSubCircuit;
@@ -249,6 +282,7 @@ public:
     __fastcall TMainForm(TComponent* Owner);
 };
 
+// Объявление TSubCircuit остается без изменений
 class TSubCircuit : public TCircuitElement {
 private:
     std::vector<std::unique_ptr<TCircuitElement>> FInternalElements;

@@ -24,6 +24,7 @@ object MainForm: TMainForm
     Height = 30
     Align = alTop
     TabOrder = 0
+    ExplicitWidth = 992
     object btnConnectionMode: TSpeedButton
       Left = 250
       Top = 0
@@ -69,7 +70,7 @@ object MainForm: TMainForm
     Height = 651
     Align = alLeft
     TabOrder = 1
-    ExplicitHeight = 631
+    ExplicitHeight = 650
     object lblLibrarySelector: TLabel
       Left = 1
       Top = 1
@@ -126,20 +127,21 @@ object MainForm: TMainForm
     Height = 651
     Align = alClient
     TabOrder = 2
-    ExplicitHeight = 631
+    ExplicitWidth = 742
+    ExplicitHeight = 650
     object SchemePageControl: TPageControl
       Left = 1
       Top = 1
-      Width = 748
-      Height = 650
+      Width = 744
+      Height = 649
       Align = alClient
       OwnerDraw = True
       PopupMenu = TabPopupMenu
       TabOrder = 0
       OnChange = SchemePageControlChange
       OnDrawTab = SchemePageControlDrawTab
-      ExplicitWidth = 744
-      ExplicitHeight = 629
+      ExplicitWidth = 740
+      ExplicitHeight = 648
     end
   end
   object StatusBar: TStatusBar
@@ -151,6 +153,8 @@ object MainForm: TMainForm
       item
         Width = 800
       end>
+    ExplicitTop = 680
+    ExplicitWidth = 992
   end
   object ElementPopupMenu: TPopupMenu
     Left = 400
@@ -261,6 +265,11 @@ object MainForm: TMainForm
         Checked = True
         OnClick = miSnapToGridClick
       end
+      object miShowBridges: TMenuItem
+        Caption = #1055#1086#1082#1072#1079#1099#1074#1072#1090#1100' '#1084#1086#1089#1090#1080#1082#1080' '#1087#1088#1080' '#1087#1077#1088#1077#1089#1077#1095#1077#1085#1080#1080
+        Checked = True
+        OnClick = miShowBridgesClick
+      end
     end
     object miSimulation: TMenuItem
       Caption = #1057#1080#1084#1091#1083#1103#1094#1080#1103
@@ -273,6 +282,17 @@ object MainForm: TMainForm
         Caption = #1057#1073#1088#1086#1089
         ShortCut = 116
         OnClick = btnResetSimulationClick
+      end
+    end
+    object miExport: TMenuItem
+      Caption = #1069#1082#1089#1087#1086#1088#1090
+      object miExportVerilog: TMenuItem
+        Caption = #1069#1082#1089#1087#1086#1088#1090' '#1074' Verilog...'
+        OnClick = miExportVerilogClick
+      end
+      object miExportQuartus: TMenuItem
+        Caption = #1069#1082#1089#1087#1086#1088#1090' '#1074' Quartus '#1087#1088#1086#1077#1082#1090'...'
+        OnClick = miExportQuartusClick
       end
     end
     object miHelp: TMenuItem

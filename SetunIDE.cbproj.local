@@ -14,9 +14,11 @@
     <Transaction>1899.12.30 00:00:00.000.453,C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.dfm=D:\TNNC\Setun IDE\2\Unit4.dfm</Transaction>
     <Transaction>1899.12.30 00:00:00.000.148,D:\TNNC\Setun IDE\2\SetunIDE.cbproj=D:\TNNC\Setun IDE\2\SetunIDE.cbproj</Transaction>
     <Transaction>1899.12.30 00:00:00.000.468,=D:\TNNC\Setun IDE\2\TernaryTypes.h</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.654,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.453,C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Unit4.h=D:\TNNC\Setun IDE\2\Unit4.h</Transaction>
     <Transaction>1899.12.30 00:00:00.000.344,=D:\TNNC\Setun IDE\2\ComponentLibrary.cpp</Transaction>
     <Transaction>1899.12.30 00:00:00.000.421,D:\TNNC\Setun IDE\2\Unit4.dfm=D:\TNNC\Setun IDE\2\MainForm.dfm</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.654,=C:\Users\Арсений\Documents\Embarcadero\Studio\Projects\Project4PCH1.h</Transaction>
+    <Transaction>2025.11.14 00:26:12.582,=D:\TNNC\Setun IDE\3\Modules\SerializationManager.cpp</Transaction>
+    <Transaction>2025.11.14 00:26:12.614,=D:\TNNC\Setun IDE\3\Modules\SimulationManager.cpp</Transaction>
   </Transactions>
 </BorlandProject>

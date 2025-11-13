@@ -54,7 +54,7 @@ void SetBounds(const TRect& NewBounds) {
 	}
 
 
-	void TCircuitElement::CalculateRelativePositions() {
+	void CalculateRelativePositions() {
 		int gridSize = 20; // Размер сетки
 
 		for (auto& input : FInputs) {
